@@ -1,0 +1,53 @@
+# ---- ROS 2 ----
+ros_ws/build/
+ros_ws/install/
+ros_ws/log/
+ros_ws/.colcon/
+*.bag
+*.db3
+*.mcap
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.mypy_cache/
+
+# ---- CMake ----
+build/
+cmake-build-*/
+CMakeCache.txt
+CMakeFiles/
+
+# ---- STM32 / Keil ----
+stm32_ws/Boards/MDK-ARM/Objects/
+stm32_ws/Boards/MDK-ARM/Listings/
+stm32_ws/Boards/MDK-ARM/DebugConfig/
+*.uvguix.*
+*.uvoptx
+*.uvprojx.bak
+*.bak
+*.o
+*.d
+*.elf
+*.bin
+*.hex
+*.map
+*.lst
+*.crf
+*.dep
+*.axf
+*.htm
+*.lnp
+*.sct
+
+# ---- IDE / OS ----
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# ---- 本地下载与机器专属文件 ----
+.downloads/
+*.local

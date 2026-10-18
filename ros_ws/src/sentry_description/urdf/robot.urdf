@@ -1,0 +1,305 @@
+<?xml version="1.0"?>
+<robot name="robot">
+  <link name="base_footprint">
+    <inertial>
+      <origin xyz="0.03075109 0.00556219 0.14059623" rpy="0 0 0"/>
+      <mass value="7.45292673"/>
+      <inertia ixx="0.13155106" ixy="0.00914621" ixz="-0.01048016" iyy="0.17594473" iyz="0.00575591" izz="0.26547165"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><mesh filename="package://sentry_description/meshes/base_collision.stl"/></geometry>
+      <material name="base_color"><color rgba="0.79215686 0.81960784 0.93333333 1"/></material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><mesh filename="package://sentry_description/meshes/base_collision.stl"/></geometry>
+    </collision>
+  </link>
+  <link name="link1_wheel1_drive">
+    <inertial>
+      <origin xyz="-0.00182111 -0.00089281 0" rpy="0 0 0"/>
+      <mass value="0.27419236"/>
+      <inertia ixx="0.00037552" ixy="0.00007465" ixz="0" iyy="0.00025985" iyz="0" izz="0.00022326"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><mesh filename="package://sentry_description/meshes/link1_wheel1_drive_collision.stl"/></geometry>
+      <material name="link1_wheel1_drive_color"><color rgba="0.29803922 0.29803922 0.29803922 1"/></material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><mesh filename="package://sentry_description/meshes/link1_wheel1_drive_collision.stl"/></geometry>
+    </collision>
+  </link>
+  <link name="link2_wheel1_steer">
+    <inertial>
+      <origin xyz="-0.01352273 -0.00661537 -0.1313528" rpy="0 0 0"/>
+      <mass value="0.75988345"/>
+      <inertia ixx="0.00180659" ixy="-0.00009999" ixz="-0.00027942" iyy="0.00196233" iyz="-0.00013641" izz="0.00054709"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><mesh filename="package://sentry_description/meshes/link2_wheel1_steer_collision.stl"/></geometry>
+      <material name="link2_wheel1_steer_color"><color rgba="0.89803922 0.91764706 0.92941176 1"/></material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><mesh filename="package://sentry_description/meshes/link2_wheel1_steer_collision.stl"/></geometry>
+    </collision>
+  </link>
+  <link name="link3_wheel2_drive">
+    <inertial>
+      <origin xyz="0.00133441 0.00094612 0" rpy="0 0 0"/>
+      <mass value="0.27419236"/>
+      <inertia ixx="0.00034893" ixy="0.00008911" ixz="0" iyy="0.00028643" iyz="0" izz="0.00022326"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><mesh filename="package://sentry_description/meshes/link3_wheel2_drive_collision.stl"/></geometry>
+      <material name="link3_wheel2_drive_color"><color rgba="0.89803922 0.89803922 0.89803922 1"/></material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><mesh filename="package://sentry_description/meshes/link3_wheel2_drive_collision.stl"/></geometry>
+    </collision>
+  </link>
+  <link name="link4_wheel2_steer">
+    <inertial>
+      <origin xyz="-0.01228793 -0.0086967 -0.1313528" rpy="0 0 0"/>
+      <mass value="0.75988345"/>
+      <inertia ixx="0.00184221" ixy="-0.00011948" ixz="-0.00025396" iyy="0.00192671" iyz="-0.00017942" izz="0.00054709"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><mesh filename="package://sentry_description/meshes/link4_wheel2_steer_collision.stl"/></geometry>
+      <material name="link4_wheel2_steer_color"><color rgba="0.89803922 0.91764706 0.92941176 1"/></material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><mesh filename="package://sentry_description/meshes/link4_wheel2_steer_collision.stl"/></geometry>
+    </collision>
+  </link>
+  <link name="link5_wheel3_drive">
+    <inertial>
+      <origin xyz="-0.00383859 -0.0018819 0" rpy="0 0 0"/>
+      <mass value="0.27419236"/>
+      <inertia ixx="0.00037552" ixy="0.00007465" ixz="0" iyy="0.00025985" iyz="0" izz="0.00022326"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><mesh filename="package://sentry_description/meshes/link5_wheel3_drive_collision.stl"/></geometry>
+      <material name="link5_wheel3_drive_color"><color rgba="0.89803922 0.91764706 0.92941176 1"/></material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><mesh filename="package://sentry_description/meshes/link5_wheel3_drive_collision.stl"/></geometry>
+    </collision>
+  </link>
+  <link name="link6_wheel3_steer">
+    <inertial>
+      <origin xyz="0.01352273 0.00661537 -0.1313528" rpy="0 0 0"/>
+      <mass value="0.75988345"/>
+      <inertia ixx="0.00180659" ixy="-0.00009999" ixz="0.00027942" iyy="0.00196233" iyz="0.00013641" izz="0.00054709"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><mesh filename="package://sentry_description/meshes/link6_wheel3_steer_collision.stl"/></geometry>
+      <material name="link6_wheel3_steer_color"><color rgba="0.89803922 0.91764706 0.92941176 1"/></material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><mesh filename="package://sentry_description/meshes/link6_wheel3_steer_collision.stl"/></geometry>
+    </collision>
+  </link>
+  <link name="link7_wheel4_drive">
+    <inertial>
+      <origin xyz="0.00165452 0.00117308 0" rpy="0 0 0"/>
+      <mass value="0.27419236"/>
+      <inertia ixx="0.00034893" ixy="0.00008911" ixz="0" iyy="0.00028643" iyz="0" izz="0.00022326"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><mesh filename="package://sentry_description/meshes/link7_wheel4_drive_collision.stl"/></geometry>
+      <material name="link7_wheel4_drive_color"><color rgba="0.29803922 0.29803922 0.29803922 1"/></material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><mesh filename="package://sentry_description/meshes/link7_wheel4_drive_collision.stl"/></geometry>
+    </collision>
+  </link>
+  <link name="link8_wheel4_steer">
+    <inertial>
+      <origin xyz="0.0102248 0.00684194 -0.11872898" rpy="0 0 0"/>
+      <mass value="0.93432451"/>
+      <inertia ixx="0.00257831" ixy="-0.00013962" ixz="0.00036" iyy="0.00266613" iyz="0.00027468" izz="0.00072136"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><mesh filename="package://sentry_description/meshes/link8_wheel4_steer_collision.stl"/></geometry>
+      <material name="link8_wheel4_steer_color"><color rgba="0.89803922 0.89803922 0.89803922 1"/></material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><mesh filename="package://sentry_description/meshes/link8_wheel4_steer_collision.stl"/></geometry>
+    </collision>
+  </link>
+  <link name="gimbal_yaw">
+    <inertial>
+      <origin xyz="-0.02412562 0.00053064 0.16576855" rpy="0 0 0"/>
+      <mass value="4.59760545"/>
+      <inertia ixx="0.12848086" ixy="0.00042571" ixz="0.0067269" iyy="0.14567939" iyz="0.00008758" izz="0.05853719"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><mesh filename="package://sentry_description/meshes/gimbal_yaw_collision.stl"/></geometry>
+      <material name="gimbal_yaw_color"><color rgba="1 1 1 1"/></material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><mesh filename="package://sentry_description/meshes/gimbal_yaw_collision.stl"/></geometry>
+    </collision>
+  </link>
+  <link name="link10_pitch">
+    <inertial>
+      <origin xyz="0.05119059 -0.03275115 0.04633006" rpy="0 0 0"/>
+      <mass value="0.95164865"/>
+      <inertia ixx="0.00235325" ixy="-0.00057263" ixz="-0.00121079" iyy="0.00359417" iyz="-0.0004005" izz="0.00407243"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><mesh filename="package://sentry_description/meshes/link10_pitch_collision.stl"/></geometry>
+      <material name="link10_pitch_color"><color rgba="0.86666667 0.86666667 0.89019608 1"/></material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><mesh filename="package://sentry_description/meshes/link10_pitch_collision.stl"/></geometry>
+    </collision>
+  </link>
+  <link name="link11_small_yaw">
+    <inertial>
+      <origin xyz="-0.00134769 0.03442742 0.07170746" rpy="0 0 0"/>
+      <mass value="0.82666442"/>
+      <inertia ixx="0.00143178" ixy="-0.00009362" ixz="-0.00002071" iyy="0.00084588" iyz="-0.00033164" izz="0.00110349"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><mesh filename="package://sentry_description/meshes/link11_small_yaw_collision.stl"/></geometry>
+      <material name="link11_small_yaw_color"><color rgba="0.75294118 1 0.75294118 1"/></material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><mesh filename="package://sentry_description/meshes/link11_small_yaw_collision.stl"/></geometry>
+    </collision>
+  </link>
+  <joint name="joint1_big_yaw" type="continuous">
+    <parent link="base_footprint"/>
+    <child link="gimbal_yaw"/>
+    <origin xyz="0 0.00008186 0.145" rpy="0 0 0"/>
+    <axis xyz="0 0 1"/>
+  </joint>
+  <joint name="joint2_small_yaw" type="revolute">
+    <parent link="gimbal_yaw"/>
+    <child link="link11_small_yaw"/>
+    <origin xyz="0 0 0.1695" rpy="0 0 0"/>
+    <axis xyz="0 0 -1"/>
+    <limit lower="-2" upper="2" effort="10" velocity="3"/>
+  </joint>
+  <joint name="joint3_pitch" type="revolute">
+    <parent link="link11_small_yaw"/>
+    <child link="link10_pitch"/>
+    <origin xyz="0.00159424 0.04657272 0.0835" rpy="0 0 0"/>
+    <axis xyz="0.03421123 0.99941462 0"/>
+    <limit lower="0" upper="0.75" effort="10" velocity="3"/>
+  </joint>
+  <joint name="joint4_wheel1_drive" type="continuous">
+    <parent link="link2_wheel1_steer"/>
+    <child link="link1_wheel1_drive"/>
+    <origin xyz="0.00447479 0.0021938 -0.1629" rpy="0 0 0"/>
+    <axis xyz="0.89789862 0.44020231 0"/>
+  </joint>
+  <joint name="joint5_wheel1_steer" type="continuous">
+    <parent link="base_footprint"/>
+    <child link="link2_wheel1_steer"/>
+    <origin xyz="-0.186 0.18608186 0.2209" rpy="0 0 0"/>
+    <axis xyz="0 0 -1"/>
+  </joint>
+  <joint name="joint6_wheel2_drive" type="continuous">
+    <parent link="link4_wheel2_steer"/>
+    <child link="link3_wheel2_drive"/>
+    <origin xyz="0.00107652 0.00076327 -0.1629" rpy="0 0 0"/>
+    <axis xyz="-0.81576096 -0.57838919 0"/>
+  </joint>
+  <joint name="joint7_wheel2_steer" type="continuous">
+    <parent link="base_footprint"/>
+    <child link="link4_wheel2_steer"/>
+    <origin xyz="0.186 0.18608186 0.2209" rpy="0 0 0"/>
+    <axis xyz="0 0 -1"/>
+  </joint>
+  <joint name="joint8_wheel3_drive" type="continuous">
+    <parent link="link6_wheel3_steer"/>
+    <child link="link5_wheel3_drive"/>
+    <origin xyz="0.00118491 0.00058091 -0.1629" rpy="0 0 0"/>
+    <axis xyz="-0.89789862 -0.44020231 0"/>
+  </joint>
+  <joint name="joint9_wheel3_steer" type="continuous">
+    <parent link="base_footprint"/>
+    <child link="link6_wheel3_steer"/>
+    <origin xyz="0.186 -0.18591814 0.2209" rpy="0 0 0"/>
+    <axis xyz="0 0 -1"/>
+  </joint>
+  <joint name="joint10_wheel4_drive" type="continuous">
+    <parent link="link8_wheel4_steer"/>
+    <child link="link7_wheel4_drive"/>
+    <origin xyz="-0.00406544 -0.00288247 -0.1629" rpy="0 0 0"/>
+    <axis xyz="-0.81576096 -0.57838919 0"/>
+  </joint>
+  <joint name="joint11_wheel4_steer" type="continuous">
+    <parent link="base_footprint"/>
+    <child link="link8_wheel4_steer"/>
+    <origin xyz="-0.186 -0.18591814 0.2209" rpy="0 0 0"/>
+    <axis xyz="0 0 -1"/>
+  </joint>
+  <link name="ref_ref1"/>
+  <joint name="ref_ref1_frame" type="fixed">
+    <parent link="base_footprint"/>
+    <child link="ref_ref1"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+  <link name="ref_ref2"/>
+  <joint name="ref_ref2_frame" type="fixed">
+    <parent link="gimbal_yaw"/>
+    <child link="ref_ref2"/>
+    <origin xyz="0 -0.00000186 0" rpy="0 0 0"/>
+  </joint>
+  <link name="ref_ref3"/>
+  <joint name="ref_ref3_frame" type="fixed">
+    <parent link="gimbal_yaw"/>
+    <child link="ref_ref3"/>
+    <origin xyz="-0.05945002 -0.06230464 0.016" rpy="0 0 0"/>
+  </joint>
+  <link name="front_mid360"/>
+  <joint name="front_mid360_frame" type="fixed">
+    <parent link="gimbal_yaw"/>
+    <child link="front_mid360"/>
+    <origin xyz="0.09141 -0.00149186 0.41508" rpy="0 0 0"/>
+  </joint>
+  <link name="ref_ref5"/>
+  <joint name="ref_ref5_frame" type="fixed">
+    <parent link="link10_pitch"/>
+    <child link="ref_ref5"/>
+    <origin xyz="0.00107576 -0.04704688 0" rpy="1.57079633 0 3.14159265"/>
+  </joint>
+  <link name="ref_ref6"/>
+  <joint name="ref_ref6_frame" type="fixed">
+    <parent link="link10_pitch"/>
+    <child link="ref_ref6"/>
+    <origin xyz="0.11934576 0.00880542 0.08684" rpy="1.22173048 0 1.57079633"/>
+  </joint>
+  <link name="ref_ref7"/>
+  <joint name="ref_ref7_frame" type="fixed">
+    <parent link="link11_small_yaw"/>
+    <child link="ref_ref7"/>
+    <origin xyz="0 -0.00000186 0" rpy="0 0 0"/>
+  </joint>
+</robot>

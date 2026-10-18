@@ -1,0 +1,73 @@
+loam_interface:
+  ros__parameters:
+    use_sim_time: false
+    state_estimation_topic: aft_mapped_to_init
+    registered_scan_topic: cloud_registered
+    odom_frame: odom
+    base_frame: base_footprint
+    lidar_frame: front_mid360
+
+terrain_analysis:
+  ros__parameters:
+    scanVoxelSize: 0.05
+    decayTime: 0.5
+    noDecayDis: 0.0
+    clearingDis: 0.5
+    useSorting: true
+    quantileZ: 0.05
+    considerDrop: false
+    limitGroundLift: false
+    maxGroundLift: 0.3
+    clearDyObs: true
+    minDyObsDis: 0.3
+    minDyObsAngle: 0.0
+    minDyObsRelZ: -0.3
+    absDyObsRelZThre: 0.2
+    minDyObsVFOV: -28.0
+    maxDyObsVFOV: 33.0
+    minDyObsPointNum: 1
+    noDataObstacle: false
+    noDataBlockSkipNum: 0
+    minBlockPointNum: 10
+    vehicleHeight: 1.0
+    voxelPointUpdateThre: 100
+    voxelTimeUpdateThre: 1.0
+    minRelZ: -0.6
+    maxRelZ: 0.6
+    disRatioZ: 0.2
+
+terrain_analysis_ext:
+  ros__parameters:
+    scanVoxelSize: 0.1
+    decayTime: 1.0
+    noDecayDis: 0.0
+    clearingDis: 0.5
+    useSorting: false
+    quantileZ: 0.2
+    vehicleHeight: 1.0
+    voxelPointUpdateThre: 100
+    voxelTimeUpdateThre: 2.0
+    lowerBoundZ: -1.5
+    upperBoundZ: 0.5
+    disRatioZ: 0.2
+    checkTerrainConn: false
+    terrainUnderVehicle: -0.75
+    terrainConnThre: 0.5
+    ceilingFilteringThre: 2.0
+    localTerrainMapRadius: 4.0
+
+pointcloud_to_laserscan:
+  ros__parameters:
+    use_sim_time: false
+    target_frame: base_footprint
+    min_height: 0.1
+    max_height: 0.6
+    min_intensity: 0.1
+    max_intensity: 2.0
+    angle_min: -3.1415926
+    angle_max: 3.1415926
+    angle_increment: 0.00872665
+    scan_time: 0.05
+    range_min: 0.43
+    range_max: 10.0
+    use_inf: true

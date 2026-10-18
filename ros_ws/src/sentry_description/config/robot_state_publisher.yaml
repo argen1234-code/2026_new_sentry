@@ -1,0 +1,11 @@
+robot_state_publisher:
+  ros__parameters:
+    use_sim_time: false
+    publish_frequency: 200.0
+
+# 关节角度数据接口:下位机桥往 source_list 里的话题发布真实关节角度即可,
+# 未收到数据时所有关节默认为 0。关节名见 urdf/robot.urdf。
+joint_state_publisher:
+  ros__parameters:
+    rate: 200
+    source_list: ["serial/joint_states_raw"]
