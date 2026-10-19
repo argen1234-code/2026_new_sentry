@@ -1,0 +1,10 @@
+usb_bridge:
+  ros__parameters:
+    # auto: 按 VID:PID 0483:5740 自动查找 STM32 USB CDC
+    port: auto
+    baud: 115200
+    enabled: true
+    command_timeout: 0.25
+    tx_period: 0.02
+    poll_period: 0.005
+    link_timeout: 1.0

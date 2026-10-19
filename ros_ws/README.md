@@ -42,6 +42,7 @@ scripts/
 | `livox_ros_driver2` | Livox MID360 驱动（含 arm64 SDK） |
 | `extra_cmd` | `cmd_vel` 转 UDP 底盘指令 |
 | `referee_serial_bridge` | 裁判系统串口数据桥 |
+| `usb_bridge` | Jetson ↔ STM32H723 USB CDC 桥接（`/unified_cmd` → MCU，MCU → `/usb_bridge/state`） |
 | `point_lio` | LiDAR-IMU 里程计与建图 |
 | `small_gicp_relocalization` | 先验点云重定位 |
 | `sentry_localization` | 建图 / 定位统一 launch |

@@ -1,0 +1,9 @@
+{
+  "schema": "communication_host_schema.hpp",
+  "managed": [
+    "proto2_rt.h",
+    "proto2_rt.c",
+    "proto2_rt.hpp",
+    "proto2_rt_codegen_manifest.json"
+  ]
+}

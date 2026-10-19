@@ -1,0 +1,474 @@
+{{ generated_notice }}
+#include "proto2_rt.h"
+
+#include <string.h>
+
+#define PROTO2_RT_STATE_MAGIC_0 0u
+#define PROTO2_RT_STATE_MAGIC_1 1u
+#define PROTO2_RT_STATE_MSG_ID 2u
+#define PROTO2_RT_STATE_SEQ_0 3u
+#define PROTO2_RT_STATE_SEQ_1 4u
+#define PROTO2_RT_STATE_PAYLOAD 5u
+#define PROTO2_RT_STATE_CRC_0 6u
+#define PROTO2_RT_STATE_CRC_1 7u
+
+{% if helpers.u16 -%}
+static uint16_t proto2_rt_read_u16_le(const uint8_t *data) {
+    return (uint16_t)data[0] | ((uint16_t)data[1] << 8);
+}
+
+{% endif -%}
+{% if helpers.u32 -%}
+static uint32_t proto2_rt_read_u32_le(const uint8_t *data) {
+    return (uint32_t)data[0] | ((uint32_t)data[1] << 8) | ((uint32_t)data[2] << 16) | ((uint32_t)data[3] << 24);
+}
+
+{% endif -%}
+{% if helpers.u64 -%}
+static uint64_t proto2_rt_read_u64_le(const uint8_t *data) {
+    return (uint64_t)data[0] | ((uint64_t)data[1] << 8) | ((uint64_t)data[2] << 16) | ((uint64_t)data[3] << 24) |
+           ((uint64_t)data[4] << 32) | ((uint64_t)data[5] << 40) | ((uint64_t)data[6] << 48) | ((uint64_t)data[7] << 56);
+}
+
+{% endif -%}
+{% if helpers.f32 -%}
+static float proto2_rt_read_f32_le(const uint8_t *data) {
+    uint32_t bits = proto2_rt_read_u32_le(data);
+    float value;
+    memcpy(&value, &bits, sizeof(value));
+    return value;
+}
+
+{% endif -%}
+{% if helpers.f64 -%}
+static double proto2_rt_read_f64_le(const uint8_t *data) {
+    uint64_t bits = proto2_rt_read_u64_le(data);
+    double value;
+    memcpy(&value, &bits, sizeof(value));
+    return value;
+}
+
+{% endif -%}
+{% if helpers.u16 -%}
+static void proto2_rt_write_u16_le(uint8_t *data, uint16_t value) {
+    data[0] = (uint8_t)(value & 0xFFu);
+    data[1] = (uint8_t)((value >> 8) & 0xFFu);
+}
+
+{% endif -%}
+{% if helpers.u32 -%}
+static void proto2_rt_write_u32_le(uint8_t *data, uint32_t value) {
+    data[0] = (uint8_t)(value & 0xFFu);
+    data[1] = (uint8_t)((value >> 8) & 0xFFu);
+    data[2] = (uint8_t)((value >> 16) & 0xFFu);
+    data[3] = (uint8_t)((value >> 24) & 0xFFu);
+}
+
+{% endif -%}
+{% if helpers.u64 -%}
+static void proto2_rt_write_u64_le(uint8_t *data, uint64_t value) {
+    data[0] = (uint8_t)(value & 0xFFu);
+    data[1] = (uint8_t)((value >> 8) & 0xFFu);
+    data[2] = (uint8_t)((value >> 16) & 0xFFu);
+    data[3] = (uint8_t)((value >> 24) & 0xFFu);
+    data[4] = (uint8_t)((value >> 32) & 0xFFu);
+    data[5] = (uint8_t)((value >> 40) & 0xFFu);
+    data[6] = (uint8_t)((value >> 48) & 0xFFu);
+    data[7] = (uint8_t)((value >> 56) & 0xFFu);
+}
+
+{% endif -%}
+{% if helpers.f32 -%}
+static void proto2_rt_write_f32_le(uint8_t *data, float value) {
+    uint32_t bits;
+    memcpy(&bits, &value, sizeof(bits));
+    proto2_rt_write_u32_le(data, bits);
+}
+
+{% endif -%}
+{% if helpers.f64 -%}
+static void proto2_rt_write_f64_le(uint8_t *data, double value) {
+    uint64_t bits;
+    memcpy(&bits, &value, sizeof(bits));
+    proto2_rt_write_u64_le(data, bits);
+}
+
+{% endif -%}
+static uint16_t proto2_rt_crc16_update(uint16_t crc, uint8_t byte) {
+    uint8_t bit;
+    crc ^= (uint16_t)byte << 8;
+    for (bit = 0u; bit < 8u; ++bit) {
+        if ((crc & 0x8000u) != 0u) {
+            crc = (uint16_t)((crc << 1) ^ 0x1021u);
+        } else {
+            crc = (uint16_t)(crc << 1);
+        }
+    }
+    return crc;
+}
+
+static uint16_t proto2_rt_crc16_ccitt(const uint8_t *data, uint16_t len) {
+    uint16_t crc = 0xFFFFu;
+    uint16_t i;
+    for (i = 0u; i < len; ++i) {
+        crc = proto2_rt_crc16_update(crc, data[i]);
+    }
+    return crc;
+}
+
+void proto2_rt_init(proto2_rt_t *rt) {
+    if (!rt) {
+        return;
+    }
+    memset(rt, 0, sizeof(*rt));
+}
+
+uint16_t proto2_rt_payload_len(uint8_t msg_id) {
+    switch (msg_id) {
+{% for message in rt.messages %}
+    case PROTO2_RT_MSG_ID_{{ message.snake|upper }}:
+        return PROTO2_RT_WIRE_SIZE_{{ message.snake|upper }};
+{% endfor %}
+    default:
+        return 0xFFFFu;
+    }
+}
+
+static proto2_rt_direction_t proto2_rt_message_direction(uint8_t msg_id) {
+    switch (msg_id) {
+{% for message in rt.messages %}
+    case PROTO2_RT_MSG_ID_{{ message.snake|upper }}:
+        return PROTO2_RT_DIRECTION_{{ message.snake|upper }};
+{% endfor %}
+    default:
+        return PROTO2_RT_DIRECTION_BIDIRECTIONAL;
+    }
+}
+
+static uint8_t proto2_rt_direction_allowed(proto2_rt_role_t role, proto2_rt_direction_t direction, uint8_t tx) {
+    if (role == PROTO2_RT_ROLE_ANY || direction == PROTO2_RT_DIRECTION_BIDIRECTIONAL) {
+        return 1u;
+    }
+    if (tx != 0u) {
+        if (role == PROTO2_RT_ROLE_DEVICE) {
+            return direction == PROTO2_RT_DIRECTION_DEVICE_TO_HOST;
+        }
+        if (role == PROTO2_RT_ROLE_HOST) {
+            return direction == PROTO2_RT_DIRECTION_HOST_TO_DEVICE;
+        }
+        return 0u;
+    }
+    if (role == PROTO2_RT_ROLE_DEVICE) {
+        return direction == PROTO2_RT_DIRECTION_HOST_TO_DEVICE;
+    }
+    if (role == PROTO2_RT_ROLE_HOST) {
+        return direction == PROTO2_RT_DIRECTION_DEVICE_TO_HOST;
+    }
+    return 0u;
+}
+
+uint8_t proto2_rt_can_tx(proto2_rt_role_t role, uint8_t msg_id) {
+    if (proto2_rt_payload_len(msg_id) == 0xFFFFu) {
+        return 0u;
+    }
+    return proto2_rt_direction_allowed(role, proto2_rt_message_direction(msg_id), 1u);
+}
+
+uint8_t proto2_rt_can_rx(proto2_rt_role_t role, uint8_t msg_id) {
+    if (proto2_rt_payload_len(msg_id) == 0xFFFFu) {
+        return 0u;
+    }
+    return proto2_rt_direction_allowed(role, proto2_rt_message_direction(msg_id), 0u);
+}
+
+static void proto2_rt_note_seq(proto2_rt_t *rt, uint8_t msg_id, uint16_t seq) {
+    switch (msg_id) {
+{% for message in rt.messages %}
+    case PROTO2_RT_MSG_ID_{{ message.snake|upper }}:
+        if (rt->have_{{ message.snake }} != 0u && (uint16_t)(rt->last_seq_{{ message.snake }} + 1u) != seq) {
+            rt->seq_errors++;
+        }
+        rt->last_seq_{{ message.snake }} = seq;
+        rt->have_{{ message.snake }} = 1u;
+        break;
+{% endfor %}
+    default:
+        break;
+    }
+}
+
+static void proto2_rt_reset_rx(proto2_rt_t *rt) {
+    rt->state = PROTO2_RT_STATE_MAGIC_0;
+    rt->msg_id = 0u;
+    rt->payload_len = 0u;
+    rt->payload_pos = 0u;
+    rt->seq = 0u;
+    rt->rx_crc = 0u;
+    rt->crc_calc = 0xFFFFu;
+}
+
+static void proto2_rt_begin_rx(proto2_rt_t *rt) {
+    rt->state = PROTO2_RT_STATE_MAGIC_1;
+    rt->msg_id = 0u;
+    rt->payload_len = 0u;
+    rt->payload_pos = 0u;
+    rt->seq = 0u;
+    rt->rx_crc = 0u;
+    rt->crc_calc = 0xFFFFu;
+    rt->crc_calc = proto2_rt_crc16_update(rt->crc_calc, PROTO2_RT_MAGIC_0);
+}
+
+static void proto2_rt_clear_frame(proto2_rt_frame_t *frame) {
+    if (frame) {
+        frame->msg_id = 0u;
+        frame->seq = 0u;
+        frame->payload = NULL;
+        frame->payload_len = 0u;
+    }
+}
+
+static proto2_rt_status_t proto2_rt_finish_frame(proto2_rt_t *rt, proto2_rt_frame_t *frame) {
+    if (rt->crc_calc != rt->rx_crc) {
+        rt->crc_errors++;
+        return PROTO2_RT_STATUS_CRC;
+    }
+    if (proto2_rt_can_rx(rt->role, rt->msg_id) == 0u) {
+        return PROTO2_RT_STATUS_DIRECTION;
+    }
+    rt->rx_frames++;
+    proto2_rt_note_seq(rt, rt->msg_id, rt->seq);
+    if (frame) {
+        frame->msg_id = rt->msg_id;
+        frame->seq = rt->seq;
+        frame->payload = rt->payload;
+        frame->payload_len = rt->payload_len;
+    }
+    return PROTO2_RT_STATUS_OK;
+}
+
+proto2_rt_status_t proto2_rt_feed_byte(proto2_rt_t *rt, uint8_t byte, proto2_rt_frame_t *frame) {
+    proto2_rt_status_t status = PROTO2_RT_STATUS_OK;
+    proto2_rt_clear_frame(frame);
+    if (!rt) {
+        return PROTO2_RT_STATUS_NULL;
+    }
+    switch (rt->state) {
+    case PROTO2_RT_STATE_MAGIC_0:
+        if (byte == PROTO2_RT_MAGIC_0) {
+            proto2_rt_begin_rx(rt);
+        }
+        break;
+    case PROTO2_RT_STATE_MAGIC_1:
+        if (byte == PROTO2_RT_MAGIC_1) {
+            rt->crc_calc = proto2_rt_crc16_update(rt->crc_calc, byte);
+            rt->state = PROTO2_RT_STATE_MSG_ID;
+        } else if (byte == PROTO2_RT_MAGIC_0) {
+            proto2_rt_begin_rx(rt);
+        } else {
+            proto2_rt_reset_rx(rt);
+        }
+        break;
+    case PROTO2_RT_STATE_MSG_ID: {
+        uint16_t payload_len = proto2_rt_payload_len(byte);
+        rt->crc_calc = proto2_rt_crc16_update(rt->crc_calc, byte);
+        if (payload_len == 0xFFFFu || payload_len > PROTO2_RT_MAX_PAYLOAD) {
+            rt->id_errors++;
+            status = PROTO2_RT_STATUS_ID;
+            proto2_rt_reset_rx(rt);
+            if (byte == PROTO2_RT_MAGIC_0) {
+                proto2_rt_begin_rx(rt);
+            }
+            break;
+        }
+        rt->msg_id = byte;
+        rt->payload_len = (uint8_t)payload_len;
+        rt->payload_pos = 0u;
+        rt->state = PROTO2_RT_STATE_SEQ_0;
+        break;
+    }
+    case PROTO2_RT_STATE_SEQ_0:
+        rt->crc_calc = proto2_rt_crc16_update(rt->crc_calc, byte);
+        rt->seq = byte;
+        rt->state = PROTO2_RT_STATE_SEQ_1;
+        break;
+    case PROTO2_RT_STATE_SEQ_1:
+        rt->crc_calc = proto2_rt_crc16_update(rt->crc_calc, byte);
+        rt->seq |= (uint16_t)byte << 8;
+        rt->state = (rt->payload_len == 0u) ? PROTO2_RT_STATE_CRC_0 : PROTO2_RT_STATE_PAYLOAD;
+        break;
+    case PROTO2_RT_STATE_PAYLOAD:
+        rt->crc_calc = proto2_rt_crc16_update(rt->crc_calc, byte);
+        rt->payload[rt->payload_pos++] = byte;
+        if (rt->payload_pos >= rt->payload_len) {
+            rt->state = PROTO2_RT_STATE_CRC_0;
+        }
+        break;
+    case PROTO2_RT_STATE_CRC_0:
+        rt->rx_crc = byte;
+        rt->state = PROTO2_RT_STATE_CRC_1;
+        break;
+    case PROTO2_RT_STATE_CRC_1:
+        rt->rx_crc |= (uint16_t)byte << 8;
+        status = proto2_rt_finish_frame(rt, frame);
+        proto2_rt_reset_rx(rt);
+        break;
+    default:
+        proto2_rt_reset_rx(rt);
+        break;
+    }
+    return status;
+}
+
+proto2_rt_status_t proto2_rt_feed(proto2_rt_t *rt,
+                                  const uint8_t *data,
+                                  uint16_t len,
+                                  proto2_rt_frame_fn on_frame,
+                                  void *user) {
+    proto2_rt_status_t status = PROTO2_RT_STATUS_OK;
+    uint16_t index;
+    if (!rt || (!data && len != 0u)) {
+        return PROTO2_RT_STATUS_NULL;
+    }
+    for (index = 0u; index < len; ++index) {
+        proto2_rt_frame_t frame;
+        proto2_rt_status_t one = proto2_rt_feed_byte(rt, data[index], &frame);
+        if (one != PROTO2_RT_STATUS_OK) {
+            status = one;
+        }
+        if (one == PROTO2_RT_STATUS_OK && frame.payload != NULL && on_frame) {
+            on_frame(user, &frame);
+        }
+    }
+    return status;
+}
+
+{% for message in rt.messages %}
+uint16_t proto2_rt_encode_{{ message.snake }}(uint8_t *out,
+                                              uint16_t out_cap,
+                                              uint16_t seq,
+                                              const proto2_rt_msg_{{ message.snake }}_t *msg) {
+    uint16_t crc;
+    if (!out || !msg || out_cap < PROTO2_RT_FRAME_SIZE_{{ message.snake|upper }}) {
+        return 0u;
+    }
+    out[0] = PROTO2_RT_MAGIC_0;
+    out[1] = PROTO2_RT_MAGIC_1;
+    out[2] = PROTO2_RT_MSG_ID_{{ message.snake|upper }};
+    proto2_rt_write_u16_le(&out[3], seq);
+{% for field in message.fields %}
+{% if field.array_len -%}
+{% if field.is_raw_byte_array -%}
+    memcpy(&out[PROTO2_RT_HEADER_SIZE + {{ field.offset }}u], msg->{{ field.name }}, {{ field.size * field.array_len }}u);
+{% elif field.is_bool -%}
+    {
+        uint16_t idx;
+        for (idx = 0u; idx < {{ field.array_len }}u; ++idx) {
+            out[PROTO2_RT_HEADER_SIZE + {{ field.offset }}u + idx] = msg->{{ field.name }}[idx] ? 1u : 0u;
+        }
+    }
+{% else -%}
+    {
+        uint16_t idx;
+        for (idx = 0u; idx < {{ field.array_len }}u; ++idx) {
+{% if field.is_float and field.size == 4 -%}
+            proto2_rt_write_f32_le(&out[PROTO2_RT_HEADER_SIZE + {{ field.offset }}u + (idx * {{ field.size }}u)], msg->{{ field.name }}[idx]);
+{% elif field.is_float and field.size == 8 -%}
+            proto2_rt_write_f64_le(&out[PROTO2_RT_HEADER_SIZE + {{ field.offset }}u + (idx * {{ field.size }}u)], msg->{{ field.name }}[idx]);
+{% elif field.size == 2 -%}
+            proto2_rt_write_u16_le(&out[PROTO2_RT_HEADER_SIZE + {{ field.offset }}u + (idx * {{ field.size }}u)], (uint16_t)(msg->{{ field.name }}[idx]));
+{% elif field.size == 4 -%}
+            proto2_rt_write_u32_le(&out[PROTO2_RT_HEADER_SIZE + {{ field.offset }}u + (idx * {{ field.size }}u)], (uint32_t)(msg->{{ field.name }}[idx]));
+{% elif field.size == 8 -%}
+            proto2_rt_write_u64_le(&out[PROTO2_RT_HEADER_SIZE + {{ field.offset }}u + (idx * {{ field.size }}u)], (uint64_t)(msg->{{ field.name }}[idx]));
+{% endif -%}
+        }
+    }
+{% endif -%}
+{% elif field.is_float and field.size == 4 -%}
+    proto2_rt_write_f32_le(&out[PROTO2_RT_HEADER_SIZE + {{ field.offset }}u], msg->{{ field.name }});
+{% elif field.is_float and field.size == 8 -%}
+    proto2_rt_write_f64_le(&out[PROTO2_RT_HEADER_SIZE + {{ field.offset }}u], msg->{{ field.name }});
+{% elif field.is_bool -%}
+    out[PROTO2_RT_HEADER_SIZE + {{ field.offset }}u] = msg->{{ field.name }} ? 1u : 0u;
+{% elif field.size == 1 -%}
+    out[PROTO2_RT_HEADER_SIZE + {{ field.offset }}u] = (uint8_t)(msg->{{ field.name }});
+{% elif field.size == 2 -%}
+    proto2_rt_write_u16_le(&out[PROTO2_RT_HEADER_SIZE + {{ field.offset }}u], (uint16_t)(msg->{{ field.name }}));
+{% elif field.size == 4 -%}
+    proto2_rt_write_u32_le(&out[PROTO2_RT_HEADER_SIZE + {{ field.offset }}u], (uint32_t)(msg->{{ field.name }}));
+{% elif field.size == 8 -%}
+    proto2_rt_write_u64_le(&out[PROTO2_RT_HEADER_SIZE + {{ field.offset }}u], (uint64_t)(msg->{{ field.name }}));
+{% endif -%}
+{% endfor %}
+    crc = proto2_rt_crc16_ccitt(out, (uint16_t)(PROTO2_RT_HEADER_SIZE + PROTO2_RT_WIRE_SIZE_{{ message.snake|upper }}));
+    proto2_rt_write_u16_le(&out[PROTO2_RT_HEADER_SIZE + PROTO2_RT_WIRE_SIZE_{{ message.snake|upper }}], crc);
+    return PROTO2_RT_FRAME_SIZE_{{ message.snake|upper }};
+}
+
+proto2_rt_status_t proto2_rt_decode_{{ message.snake }}(proto2_rt_msg_{{ message.snake }}_t *out,
+                                                        const uint8_t *payload,
+                                                        uint8_t payload_len) {
+    if (!out || (!payload && payload_len != 0u)) {
+        return PROTO2_RT_STATUS_NULL;
+    }
+    if (payload_len != PROTO2_RT_WIRE_SIZE_{{ message.snake|upper }}) {
+        return PROTO2_RT_STATUS_LENGTH;
+    }
+{% if message.size == 0 -%}
+    (void)payload;
+{% endif -%}
+{% for field in message.fields %}
+{% if field.array_len -%}
+{% if field.is_raw_byte_array -%}
+    memcpy(out->{{ field.name }}, &payload[{{ field.offset }}u], {{ field.size * field.array_len }}u);
+{% elif field.is_bool -%}
+    {
+        uint16_t idx;
+        for (idx = 0u; idx < {{ field.array_len }}u; ++idx) {
+            if (payload[{{ field.offset }}u + idx] > 1u) {
+                return PROTO2_RT_STATUS_DECODE;
+            }
+            out->{{ field.name }}[idx] = payload[{{ field.offset }}u + idx];
+        }
+    }
+{% else -%}
+    {
+        uint16_t idx;
+        for (idx = 0u; idx < {{ field.array_len }}u; ++idx) {
+{% if field.is_float and field.size == 4 -%}
+            out->{{ field.name }}[idx] = proto2_rt_read_f32_le(&payload[{{ field.offset }}u + (idx * {{ field.size }}u)]);
+{% elif field.is_float and field.size == 8 -%}
+            out->{{ field.name }}[idx] = proto2_rt_read_f64_le(&payload[{{ field.offset }}u + (idx * {{ field.size }}u)]);
+{% elif field.size == 2 -%}
+            out->{{ field.name }}[idx] = ({{ field.ctype }})proto2_rt_read_u16_le(&payload[{{ field.offset }}u + (idx * {{ field.size }}u)]);
+{% elif field.size == 4 -%}
+            out->{{ field.name }}[idx] = ({{ field.ctype }})proto2_rt_read_u32_le(&payload[{{ field.offset }}u + (idx * {{ field.size }}u)]);
+{% elif field.size == 8 -%}
+            out->{{ field.name }}[idx] = ({{ field.ctype }})proto2_rt_read_u64_le(&payload[{{ field.offset }}u + (idx * {{ field.size }}u)]);
+{% endif -%}
+        }
+    }
+{% endif -%}
+{% elif field.is_float and field.size == 4 -%}
+    out->{{ field.name }} = proto2_rt_read_f32_le(&payload[{{ field.offset }}u]);
+{% elif field.is_float and field.size == 8 -%}
+    out->{{ field.name }} = proto2_rt_read_f64_le(&payload[{{ field.offset }}u]);
+{% elif field.is_bool -%}
+    if (payload[{{ field.offset }}u] > 1u) {
+        return PROTO2_RT_STATUS_DECODE;
+    }
+    out->{{ field.name }} = payload[{{ field.offset }}u];
+{% elif field.size == 1 -%}
+    out->{{ field.name }} = ({{ field.ctype }})payload[{{ field.offset }}u];
+{% elif field.size == 2 -%}
+    out->{{ field.name }} = ({{ field.ctype }})proto2_rt_read_u16_le(&payload[{{ field.offset }}u]);
+{% elif field.size == 4 -%}
+    out->{{ field.name }} = ({{ field.ctype }})proto2_rt_read_u32_le(&payload[{{ field.offset }}u]);
+{% elif field.size == 8 -%}
+    out->{{ field.name }} = ({{ field.ctype }})proto2_rt_read_u64_le(&payload[{{ field.offset }}u]);
+{% endif -%}
+{% endfor %}
+    return PROTO2_RT_STATUS_OK;
+}
+
+{% endfor %}

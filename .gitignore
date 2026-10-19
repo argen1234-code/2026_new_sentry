@@ -50,4 +50,5 @@ Thumbs.db
 
 # ---- 本地下载与机器专属文件 ----
 .downloads/
+stm32_ws/backup/
 *.local

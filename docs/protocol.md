@@ -88,3 +88,25 @@
 | `ErrorReport` | `sentry_msgs/msg/ErrorReport` | STM32 → ROS |
 
 串口桥节点 `sentry_devices/serial_bridge` 负责帧收发、校验、时间戳与 topic 转换，其它包不直接操作串口。
+
+## 7. USB CDC 桥接（已实现）
+
+Jetson 与 STM32 之间的第一条链路使用 USB CDC，协议事实源：
+
+- STM32：`stm32_ws/Component/Communication/Src/communication_usb.h`
+- Jetson：`ros_ws/src/sentry_hardware/usb_bridge/usb_bridge/protocol.py`
+
+完整字段布局见 [usb_bridge/README.md](../ros_ws/src/sentry_hardware/usb_bridge/README.md)。
+
+| 项 | 值 |
+|---|---|
+| USB VID:PID | `0483:5740` |
+| 设备名 | `Printk DM 02` |
+| 帧格式 | `AA 55 \| id \| seq \| len \| payload \| xor` |
+| 主机命令 | `0x01` 心跳、`0x10` `UnifiedCmd`（45 B） |
+| MCU 上报 | `0x81` 状态（40 B）、`0x82` 心跳（8 B） |
+| 链路超时 | 500 ms 无主机帧则清除命令有效位 |
+| 周期 | 命令 50 Hz，MCU 状态 50 Hz，心跳 10 Hz |
+
+> 修改字段时必须同时更新 `communication_usb.c`、`protocol.py` 和本文档；
+> 帧长固定，任一方向长度不一致都会导致解析失败。

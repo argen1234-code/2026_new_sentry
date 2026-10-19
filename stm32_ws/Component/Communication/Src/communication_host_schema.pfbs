@@ -1,0 +1,55 @@
+namespace proto2.rt;
+
+message HostAim @msg_id(0x01) @direction(host_to_device) {
+  yaw_rad: float;
+  pitch_rad: float;
+  valid_mask: uint8_t;
+  enable: uint8_t;
+  host_time_us: uint32_t;
+}
+
+message GimbalState @msg_id(0x02) @direction(device_to_host) {
+  yaw_rad: float;
+  pitch_rad: float;
+  yaw_rate_rad_s: float;
+  pitch_rate_rad_s: float;
+  status: uint8_t;
+  time_us: uint32_t;
+}
+
+message RtProbe @msg_id(0x03) @direction(bidirectional) {
+  token: uint16_t;
+  time_us: uint32_t;
+}
+
+message RtProbeAck @msg_id(0x04) @direction(bidirectional) {
+  token: uint16_t;
+  request_time_us: uint32_t;
+  reply_time_us: uint32_t;
+}
+
+message CommunicationBoardState @msg_id(0x05) @direction(bidirectional) {
+  yaw_motor_rad: float;
+  ins_yaw_rad: float;
+  ins_pitch_rad: float;
+  ins_roll_rad: float;
+  gimbal_mode: uint8_t;
+  shoot_mode: uint8_t;
+  rc_ch0: int16_t;
+  rc_ch1: int16_t;
+  rc_ch2: int16_t;
+  rc_ch3: int16_t;
+  rc_sw0: uint8_t;
+  rc_sw1: uint8_t;
+  status: uint8_t;
+  time_us: uint32_t;
+}
+
+message CommunicationChassisState @msg_id(0x06) @direction(bidirectional) {
+  yaw_rad: float;
+  pitch_rad: float;
+  roll_rad: float;
+  robot_id: uint16_t;
+  status: uint8_t;
+  time_us: uint32_t;
+}

@@ -1,0 +1,61 @@
+{{ generated_notice }}
+#ifndef GENERATED_PROTO2_RT_HPP
+#define GENERATED_PROTO2_RT_HPP
+
+#include "proto2_rt.h"
+
+#include <cstdint>
+
+namespace proto2 {
+namespace rt {
+
+using Status = proto2_rt_status_t;
+using Direction = proto2_rt_direction_t;
+using Role = proto2_rt_role_t;
+using Context = proto2_rt_t;
+using Frame = proto2_rt_frame_t;
+using FrameFn = proto2_rt_frame_fn;
+
+inline void Init(Context &ctx) {
+    proto2_rt_init(&ctx);
+}
+
+inline uint16_t PayloadLen(uint8_t msg_id) {
+    return proto2_rt_payload_len(msg_id);
+}
+
+inline bool CanTx(Role role, uint8_t msg_id) {
+    return proto2_rt_can_tx(role, msg_id) != 0u;
+}
+
+inline bool CanRx(Role role, uint8_t msg_id) {
+    return proto2_rt_can_rx(role, msg_id) != 0u;
+}
+
+inline Status FeedByte(Context &ctx, uint8_t byte, Frame &frame) {
+    return proto2_rt_feed_byte(&ctx, byte, &frame);
+}
+
+inline Status Feed(Context &ctx, const uint8_t *data, uint16_t len, FrameFn on_frame, void *user) {
+    return proto2_rt_feed(&ctx, data, len, on_frame, user);
+}
+
+{% for message in rt.messages %}
+using {{ message.name }} = proto2_rt_msg_{{ message.snake }}_t;
+
+inline uint16_t Encode{{ message.name }}(uint8_t *out,
+                                         uint16_t out_cap,
+                                         uint16_t seq,
+                                         const {{ message.name }} &msg) {
+    return proto2_rt_encode_{{ message.snake }}(out, out_cap, seq, &msg);
+}
+
+inline Status Decode{{ message.name }}({{ message.name }} &out, const uint8_t *payload, uint8_t payload_len) {
+    return proto2_rt_decode_{{ message.snake }}(&out, payload, payload_len);
+}
+
+{% endfor %}
+}  // namespace rt
+}  // namespace proto2
+
+#endif /* GENERATED_PROTO2_RT_HPP */

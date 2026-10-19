@@ -34,20 +34,65 @@ colcon test-result --verbose
 
 ## 2. STM32 固件
 
-沿用 old_sentry 的构建方式：CubeMX 生成板级工程，Keil MDK 编译。
+目标板：STM32H723VGTx（1 MB Flash）。构建：CMake + Ninja + arm-none-eabi-gcc。
+调试/烧录：DAPLink v2（CMSIS-DAP）+ OpenOCD 0.12。
 
-- Keil 工程：`stm32_ws/Boards/MDK-ARM/`（待导入）
 - 最终入口：`stm32_ws/Tasks/main.c`，**不要**把 CubeMX 生成的 `Core/Src/main.c` 当作最终入口。
 - `.ioc` 只用于生成板级事实，禁止手改生成文件和 `main()` 初始化顺序。
+- Keil 工程仍保留在 `Boards/MDK-ARM/`，但日常构建使用 CMake。
 
-编译流程（导入工程后）：
+固件选项：
 
-1. 打开 `Boards/MDK-ARM/*.uvprojx`。
-2. 选择 target 和调试器（DAP-Link / ST-Link）。
-3. Build，确认无 warning 后烧录。
-4. 先验证板上资源（Flash、IMU、蜂鸣器、USB CDC），再验证电机与通信链路。
+```bash
+cd stm32_ws/Boards
 
-可选 CMake 构建（待定）：`stm32_ws/Boards/cmake/` 预留。
+# 默认 sentry_2026
+cmake --preset Debug
+cmake --build --preset Debug
+
+# 其它选项
+cmake --preset Debug -DROBOT_TARGET=board_only_dm02
+cmake --build --preset Debug
+```
+
+可选值：`sentry_2026`、`sentry_2026_bringup`、`infantry_steer_2025`、`board_only_dm02`。
+
+台架调试（只启动 Communication + USB 桥接）：
+
+```bash
+cmake -S . -B build/bringup -G Ninja \
+  -DCMAKE_BUILD_TYPE=Debug \
+  -DROBOT_TARGET=sentry_2026_bringup
+cmake --build build/bringup
+```
+
+烧录：
+
+```bash
+openocd -f interface/cmsis-dap.cfg -f target/stm32h7x.cfg \
+  -c "program build/Debug/CtrlBoard-H7_IMU.elf verify reset exit"
+```
+
+验证顺序建议：
+
+1. `board_only_dm02` 光板测试（Flash / IMU / 蜂鸣器 / USB CDC）。
+2. `sentry_2026_bringup` 启动，确认 USB CDC 枚举、`/usb_bridge/state` 有数据。
+3. `sentry_2026` 启动，确认 IMU/observer 初始化通过后再接入控制链路。
+4. 按数据流逐步验证：CAN 反馈 → 云台电机读写 → 遥控链路 → 发射链路。
+
+USB 桥接验证：
+
+```bash
+cd ros_ws
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
+ros2 launch usb_bridge usb_bridge.launch.py
+
+# 另开终端
+ros2 topic echo /usb_bridge/state
+```
+
+STM32 枚举为 `0483:5740`（`Printk DM 02`），节点自动查找，不依赖 `/dev/ttyACM` 编号。
 
 ## 3. 部署到机器人
 

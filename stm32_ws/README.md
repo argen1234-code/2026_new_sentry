@@ -12,7 +12,7 @@
 | `Component` | 可复用业务组件：Controller、Input、Observer、Communication、Debug、Ui、Aim。 |
 | `Apps` | 应用层 glue，平铺维护 `app_*.c/.h/_config.h`，负责读取设备与组件快照、组装输入、调度组件、执行输出。 |
 | `Robot` | 具体车辆 target 配置入口，按“一台车一组完整事实”维护。 |
-| `Tasks` | 工程主入口和 RTOS app 启动顺序；`main.c/.h` 持有真正 `main()`，`Src/task_main.c/.h` 只编排 Apps。 |
+| `Tasks` | 工程主入口和 RTOS app 启动顺序；`main.c` + `firmware_main.h` 持有真正 `main()`，`Src/task_main.c/.h` 只编排 Apps。 |
 | `Template` | 新增模块的模板文件与注释规范。 |
 | `Tools` | 协议生成器、调试辅助工具。 |
 | `Boards` | CubeMX/HAL/Keil 工程与板级生成文件。 |
@@ -31,6 +31,60 @@ Tasks -> Robot -> Apps -> Component -> Devices -> Bsp -> Boards
 - `Devices` 不出现具体机器人业务语义。
 - `Apps` 不手写协议解析和电机控制算法。
 - `Robot` 只放配置事实，不放实现。
+
+## 固件选项（编译期选择）
+
+固件通过 CMake 缓存变量 `ROBOT_TARGET` 选择具体车辆，同一套源码编译出不同固件：
+
+| 选项 | 说明 | CAN 电机 |
+|---|---|---|
+| `sentry_2026` | 2026 哨兵，默认选项 | 使用 |
+| `sentry_2026_bringup` | 2026 哨兵台架：仅 Communication + USB 桥接 | 不启动 |
+| `can1_dmh6215_test` | CAN1 单电机 DMH6215 台架测试 | 仅 CAN1 |
+| `infantry_steer_2025` | 2025 舵轮步兵 | 使用 |
+| `board_only_dm02` | DM02 光板板载资源测试 | 不启动 |
+
+构建（在 `Boards/` 下）：
+
+```bash
+cd Boards
+
+# 默认：sentry_2026
+cmake --preset Debug
+cmake --build --preset Debug
+
+# 切换到其它选项
+cmake --preset Debug -DROBOT_TARGET=board_only_dm02
+cmake --build --preset Debug
+
+# 或使用独立构建目录，避免反复改缓存
+cmake -S . -B build/board_test -G Ninja \
+  -DCMAKE_TOOLCHAIN_FILE=cmake/gcc-arm-none-eabi.cmake \
+  -DCMAKE_BUILD_TYPE=Debug \
+  -DROBOT_TARGET=board_only_dm02
+cmake --build build/board_test
+```
+
+产物：`build/Debug/CtrlBoard-H7_IMU.elf`。
+
+## 烧录与调试
+
+目标板：STM32H723VGTx（1 MB Flash），调试器：CMSIS-DAP v2 / DAPLink。
+
+```bash
+# 烧录并复位
+openocd -f interface/cmsis-dap.cfg -f target/stm32h7x.cfg \
+  -c "program build/Debug/CtrlBoard-H7_IMU.elf verify reset exit"
+
+# GDB 调试
+openocd -f interface/cmsis-dap.cfg -f target/stm32h7x.cfg
+gdb-multiarch build/Debug/CtrlBoard-H7_IMU.elf
+(gdb) target extended-remote :3333
+(gdb) monitor reset halt
+(gdb) load
+```
+
+首次导入前已把板内固件备份到 `backup/original_1MB.bin`（该目录不提交到仓库）。
 
 ## 车辆 target 约定
 
@@ -85,6 +139,63 @@ Communication
 - 不使用 CubeMX 生成的 `Core/Src/main.c` 作为最终入口，最终入口是 `Tasks/main.c`。
 - CMSIS-DSP 使用 `ThirdParty/CMSIS-DSP` 的版本，不使用 CubeMX 自带旧库。
 
+## USB CDC 桥接
+
+`Component/Communication/Src/communication_usb.c` 实现 Jetson ↔ STM32 的 USB CDC 帧协议，
+由 `app_communication` 在 50 Hz 周期内收发；协议与 Jetson 侧 `ros_ws/src/sentry_hardware/usb_bridge` 保持一致。
+
+- 帧格式：`AA 55 | id | seq | len | payload | xor`
+- 主机命令：`0x01` 心跳、`0x10` `UnifiedCmd`
+- MCU 上报：`0x81` 状态、`0x82` 心跳
+- 主机 500 ms 无帧时 MCU 自动清除命令有效位
+- USB 枚举为 `0483:5740`（`Printk DM 02`），Jetson 侧按 VID/PID 自动识别
+
+## CAN1 DMH6215 台架测试
+
+`can1_dmh6215_test` 选项只启动 Communication + `app_can_test`：
+
+- FDCAN1，1 Mbps，标准帧
+- 扫描 ID 1..8，发送达妙使能、原生速度模式命令
+- 收到反馈后，锁定电机 ID，向 `ID + 0x200` 持续发送 float 速度指令
+- 速度目标宏：`APP_CAN_TEST_VEL_RAD_S`（默认 3.0）
+- 测试会一直运行，直到断电或烧回 `sentry_2026_bringup`
+- 诊断量可在 GDB 中读取：`app_can_test_rx_count`、`app_can_test_last_id`、
+  `app_can_test_last_data`、`app_can_test_last_tx`、`app_can_test_tec/rec/psr`、
+  `app_can_test_phase`、`app_can_test_cmd_vel`
+
+实测结果（2026-10-19，右后 DMH6215 悬空）：
+
+| 项 | 值 |
+|---|---|
+| 反馈 ID | `0x00` |
+| 电机 ID | `1`（反馈 `data[0]=0x11`） |
+| TEC / REC | `0 / 0` |
+| 速度指令帧 | `00 00 40 40 00 00 00 00`（float 3.0） |
+| 反馈 | 位置持续变化，电机连续旋转 |
+| 结论 | CAN_H/CAN_L 未接反，原生速度模式可连续运行 |
+
+> DMH6215 的速度反馈量程可能不是旧代码里的 ±200 rad/s；用当前 `DmMotorLimit6215`
+> 解码出的速度值只用于趋势判断，精确标定需要对照达妙文档。
+
+已记录的底盘方向事实：
+
+- 右后轮（CAN1 / ID 1）：正速度指令 `+3.0` 使车身**后退**，所以车身前进时该轮取负。
+- 底盘类型已切换为 `ROBOT_CHASSIS_KIND_MECANUM`。
+- 完整电机映射与待测轮子见 [`docs/hardware.md`](../docs/hardware.md)。
+
+停止测试（烧回无电机输出的 bring-up 固件）：
+
+```bash
+cd stm32_ws/Boards
+openocd -f interface/cmsis-dap.cfg -f target/stm32h7x.cfg \
+  -c "program build/bringup/CtrlBoard-H7_IMU.elf verify reset exit"
+```
+
 ## 当前状态
 
-目前仅创建目录骨架，尚未导入 CubeMX 工程与外设初始化代码。
+- 已导入 H723 板级基线（HAL / FreeRTOS / USB CDC / CMake / Keil）。
+- 已加入 `sentry_2026` 与台架选项 `sentry_2026_bringup`。
+- USB CDC 桥接已在台架上跑通（约 60 帧/s 双向，0 CRC 错误）。
+- `sentry_2026` 的 map/param 目前继承 `infantry_steer_2025`，实车接线、电机 ID 和 PID 参数需要按哨兵硬件标定。
+- 全功能 `sentry_2026` 目前在台架上卡在 `app_observe_init`（IMU/observer 初始化失败）；台架调试请使用 `sentry_2026_bringup`。
+- 已确认 HAL tick 优先级必须为 0，否则 FreeRTOS 启动前的 `BASEPRI=0x50` 会屏蔽 TIM6，导致 `HAL_Delay` 卡死。

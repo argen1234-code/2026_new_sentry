@@ -70,6 +70,7 @@ STM32 固件：见 [`stm32_ws/README.md`](stm32_ws/README.md) 和 [`docs/build.m
 - [`docs/architecture.md`](docs/architecture.md)：分层、依赖方向、字段所有权
 - [`docs/protocol.md`](docs/protocol.md)：Jetson ↔ STM32 通信协议草案
 - [`docs/build.md`](docs/build.md)：构建、烧录、部署
+- [`docs/hardware.md`](docs/hardware.md)：底盘、电机 CAN 映射与方向约定
 - [`ros_ws/README.md`](ros_ws/README.md)：ROS 功能包职责
 - [`stm32_ws/README.md`](stm32_ws/README.md)：固件分层与 target 约定
 

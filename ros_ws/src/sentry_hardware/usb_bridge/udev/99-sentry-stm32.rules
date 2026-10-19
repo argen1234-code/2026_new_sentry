@@ -1,0 +1,2 @@
+# STM32H723 USB CDC (VID 0x0483, PID 0x5740, product "Printk DM 02")
+SUBSYSTEM=="tty", ATTRS{idVendor}=="0483", ATTRS{idProduct}=="5740", SYMLINK+="sentry_stm32", MODE="0666", GROUP="plugdev"
