@@ -1,0 +1,23 @@
+# Keil build output
+MDK-ARM/CtrlBoard-H7_IMU/
+MDK-ARM/*.uvguix.*
+MDK-ARM/*.build_log.htm
+MDK-ARM/*.log
+*.o
+*.d
+*.crf
+*.axf
+*.hex
+*.map
+*.lst
+*.dep
+
+# Host example build
+**/build/
+
+# Editor
+.vscode/
+**/.vscode/
+
+# Logs
+*.log
