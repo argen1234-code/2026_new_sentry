@@ -114,7 +114,7 @@ extern "C" {
 #define ROBOT_CHASSIS_DM_GEAR_RATIO                1.0F                               /**< DM6215 直驱减速比。 */
 #define ROBOT_CHASSIS_DM_MAX_RAD_S                 40.0F                              /**< DM 速度模式最大转速。 */
 #define ROBOT_CHASSIS_DM_MAX_WHEEL_SPEED           (ROBOT_CHASSIS_DM_MAX_RAD_S * ROBOT_CHASSIS_WHEEL_RADIUS_M * ROBOT_CHASSIS_DM_GEAR_RATIO) /**< DM 路径最大轮速，m/s。 */
-#define ROBOT_CHASSIS_DM_FB_LOST_MS                200U                               /**< DM 反馈离线判定，单位 ms；约 12 个反馈周期。 */
+#define ROBOT_CHASSIS_DM_FB_LOST_MS                1000U                              /**< DM 反馈离线判定，单位 ms；实车测到真实间隔后再收紧。 */
 #define ROBOT_CHASSIS_DM_ENABLE_PERIOD_MS          500U                               /**< DM 运行中重发使能周期，单位 ms；与 6c5c78b 基线一致。 */
 #define ROBOT_CHASSIS_DM_DISABLE_AFTER_MS          1000U                              /**< 持续故障 1 s 后失能，单位 ms。 */
 #define ROBOT_CHASSIS_DM_STOP_PERIOD_MS            100U                               /**< 故障锁存后重发停止周期，单位 ms。 */

@@ -78,12 +78,21 @@ extern "C" {
 #define APP_CHASSIS_REQUIRE_GIMBAL_READY          0U
 
 /*
- * 台架注入：无遥控器时直接给前进 0.0135 m/s（轮端 0.3 rad/s），20 s 后自动停止。
- * 四轮验证已完成，默认关闭；需要复测时临时改回 1。
+ * 台架注入：无遥控器时直接给前进速度，超时后自动停止。
+ * 默认关闭；需要复测时可用 CMake CFLAGS 覆盖，或在本地临时改回 1。
  */
+#ifndef APP_CHASSIS_BENCH_TEST
 #define APP_CHASSIS_BENCH_TEST                    0U
+#endif
+#ifndef APP_CHASSIS_BENCH_MS
 #define APP_CHASSIS_BENCH_MS                      20000U
+#endif
+#ifndef APP_CHASSIS_BENCH_VX_MPS
 #define APP_CHASSIS_BENCH_VX_MPS                  0.0135F
+#endif
+#ifndef APP_CHASSIS_BENCH_RAMP_MS
+#define APP_CHASSIS_BENCH_RAMP_MS                 0U
+#endif
 
 /* ==========================================================================
  * 参数分组

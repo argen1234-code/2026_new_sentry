@@ -60,6 +60,11 @@ extern "C" {
 #define APP_CHASSIS_REQUIRE_GIMBAL_READY 1U
 #endif
 
+/** @brief 台架注入从 0 加速到目标速度的时间，单位 ms；0 表示直接阶跃。 */
+#ifndef APP_CHASSIS_BENCH_RAMP_MS
+#define APP_CHASSIS_BENCH_RAMP_MS 0U
+#endif
+
 #ifdef __cplusplus
 }
 #endif

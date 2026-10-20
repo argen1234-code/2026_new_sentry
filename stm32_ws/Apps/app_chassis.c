@@ -163,6 +163,12 @@ static uint32_t app_chassis_dm_mode_fail_count;
 /** @brief 每个驱动轮读回的 CTRL_MODE，0xFFFFFFFF 表示未读到。 */
 static uint32_t app_chassis_dm_mode_value[CHASSIS_DRIVE_MAX];
 
+/** @brief 运行期间每个驱动轮的反馈离线周期计数。 */
+static uint32_t app_chassis_drive_offline_count[CHASSIS_DRIVE_MAX];
+
+/** @brief 首次进入故障状态时的驱动轮在线掩码。 */
+static uint8_t app_chassis_dm_fault_mask;
+
 static void app_chassis_dm_start(void);
 static void app_chassis_dm_set_speed_mode(void);
 static void app_chassis_dm_enable_all(uint32_t now_ms);
@@ -535,14 +541,25 @@ static void app_chassis_fill_cmd(ChassisInput *input)
     if (app_chassis_bench_start_ms == 0U) {
         app_chassis_bench_start_ms = HAL_GetTick();
     }
-    if ((uint32_t)(HAL_GetTick() - app_chassis_bench_start_ms) < APP_CHASSIS_BENCH_MS) {
-        input->cmd.online = 1U;
-        input->cmd.mode = ChassisModeNoFollow;
-        input->cmd.vx = APP_CHASSIS_BENCH_VX_MPS;
-        input->cmd.vy = 0.0F;
-        input->cmd.wz = 0.0F;
-    } else {
-        input->cmd.force_stop = 1U;
+    {
+        uint32_t elapsed_ms = (uint32_t)(HAL_GetTick() - app_chassis_bench_start_ms);
+        float32_t bench_vx = APP_CHASSIS_BENCH_VX_MPS;
+
+        if (elapsed_ms < APP_CHASSIS_BENCH_MS) {
+#if APP_CHASSIS_BENCH_RAMP_MS > 0U
+            if (elapsed_ms < APP_CHASSIS_BENCH_RAMP_MS) {
+                bench_vx = APP_CHASSIS_BENCH_VX_MPS *
+                           ((float32_t)elapsed_ms / (float32_t)APP_CHASSIS_BENCH_RAMP_MS);
+            }
+#endif
+            input->cmd.online = 1U;
+            input->cmd.mode = ChassisModeNoFollow;
+            input->cmd.vx = bench_vx;
+            input->cmd.vy = 0.0F;
+            input->cmd.wz = 0.0F;
+        } else {
+            input->cmd.force_stop = 1U;
+        }
     }
 #endif
 }
@@ -937,7 +954,9 @@ static void app_chassis_commit(const ChassisInput *input,
     for (i = 0U; i < CHASSIS_DRIVE_MAX; i++) {
         app_chassis_diag.drive_speed_fb_min[i] = app_chassis_dm_fb_min[i];
         app_chassis_diag.drive_speed_fb_max[i] = app_chassis_dm_fb_max[i];
+        app_chassis_diag.drive_offline_count[i] = app_chassis_drive_offline_count[i];
     }
+    app_chassis_diag.dm_fault_mask = app_chassis_dm_fault_mask;
 #endif
     for (i = 0U; i < CHASSIS_STEER_MAX; i++) {
         app_chassis_diag.steer_status[i] = steer_status[i];
@@ -972,41 +991,82 @@ static void app_chassis_commit(const ChassisInput *input,
  */
 #if defined(ROBOT_CHASSIS_DRIVE_MODE_DM_SPEED)
 /**
+ * @brief 读取一个电机的 CTRL_MODE 并等待新应答。
+ *
+ * @param id 电机 ID。
+ * @param value 读回值输出。
+ * @param timeout_ms 等待时间，单位 ms。
+ * @return 1 表示读到新应答，0 表示超时。
+ */
+static uint8_t app_chassis_dm_read_mode(uint16_t id, uint32_t *value, uint32_t timeout_ms)
+{
+    uint32_t seq = motor_dm_param_seq();
+    uint32_t waited = 0U;
+    uint32_t read_value = 0xFFFFFFFFU;
+
+    (void)motor_dm_param_cmd(MOTOR_CHASSIS_BUS, id, 0x33U, 0x0AU, 0U);
+    while (waited < timeout_ms) {
+        osDelay(5U);
+        waited += 5U;
+        if ((motor_dm_param_seq() != seq) &&
+            (motor_dm_param_get(id, 0x0AU, &read_value) != 0U)) {
+            if (value != NULL) {
+                *value = read_value;
+            }
+            return 1U;
+        }
+    }
+
+    return 0U;
+}
+
+/**
  * @brief 将四个驱动轮切换到达妙原生速度模式并读回确认。
  *
  * 6c5c78b 基线在跑速度前会写 CTRL_MODE=3（0x55 / RID 0x0A）、读回确认，
  * 再保存参数。缺少这一步时，模式不是 3 的电机仍会发反馈，但会忽略
  * ID+0x200 的使能和速度帧，表现为“在线但不动”。
+ *
+ * 这里先读后写：已经是 3 的电机不再写参数，避免不必要的模式写入导致
+ * ID 重排或启动期反馈短暂中断。
  */
 static void app_chassis_dm_set_speed_mode(void)
 {
     uint32_t i;
-    uint32_t round;
+    uint32_t attempt;
     uint32_t ok_count = 0U;
+    uint32_t written_count = 0U;
 
     app_chassis_dm_mode_ok_count = 0U;
     app_chassis_dm_mode_fail_count = 0U;
 
     for (i = 0U; i < CHASSIS_DRIVE_MAX; i++) {
         uint16_t id = (uint16_t)(ROBOT_TARGET_MOTOR_CHASSIS_DM_ID_0 + i);
-        uint32_t seq;
         uint32_t value = 0xFFFFFFFFU;
 
         app_chassis_dm_mode_value[i] = 0xFFFFFFFFU;
 
-        /* 与基线一致：先写，再读回确认，避免写帧丢失后误以为已切模式。 */
-        (void)motor_dm_param_cmd(MOTOR_CHASSIS_BUS, id, 0x55U, 0x0AU, 3U);
-        osDelay(50U);
-
-        seq = motor_dm_param_seq();
-        (void)motor_dm_param_cmd(MOTOR_CHASSIS_BUS, id, 0x33U, 0x0AU, 0U);
-
-        for (round = 0U; round < 40U; round++) {
-            osDelay(5U);
-            if ((motor_dm_param_seq() != seq) &&
-                (motor_dm_param_get(id, 0x0AU, &value) != 0U)) {
+        /* 先读两次，避免单次应答丢失就误判模式不对。 */
+        for (attempt = 0U; attempt < 2U; attempt++) {
+            if ((app_chassis_dm_read_mode(id, &value, 300U) != 0U) && (value == 3U)) {
                 app_chassis_dm_mode_value[i] = value;
                 break;
+            }
+        }
+
+        if (app_chassis_dm_mode_value[i] != 3U) {
+            /* 不是 3 或读不到：写入后再读回，最多两轮。 */
+            for (attempt = 0U; attempt < 2U; attempt++) {
+                (void)motor_dm_param_cmd(MOTOR_CHASSIS_BUS, id, 0x55U, 0x0AU, 3U);
+                osDelay(50U);
+                value = 0xFFFFFFFFU;
+                if ((app_chassis_dm_read_mode(id, &value, 300U) != 0U) &&
+                    (value == 3U)) {
+                    app_chassis_dm_mode_value[i] = value;
+                    written_count++;
+                    break;
+                }
+                app_chassis_dm_mode_value[i] = value;
             }
         }
 
@@ -1018,7 +1078,7 @@ static void app_chassis_dm_set_speed_mode(void)
     app_chassis_dm_mode_ok_count = ok_count;
     app_chassis_dm_mode_fail_count = (uint32_t)CHASSIS_DRIVE_MAX - ok_count;
 
-    if (ok_count == (uint32_t)CHASSIS_DRIVE_MAX) {
+    if ((ok_count == (uint32_t)CHASSIS_DRIVE_MAX) && (written_count > 0U)) {
         for (i = 0U; i < CHASSIS_DRIVE_MAX; i++) {
             (void)motor_dm_param_cmd(MOTOR_CHASSIS_BUS,
                                      (uint16_t)(ROBOT_TARGET_MOTOR_CHASSIS_DM_ID_0 + i),
@@ -1195,6 +1255,8 @@ static void app_chassis_entry(void *argument)
                         app_chassis_dm_fb_max[i] = fb_speed;
                     }
                 }
+            } else {
+                app_chassis_drive_offline_count[i]++;
             }
         }
         dm_fault = ((app_chassis_dm_ready == 0U) ||
@@ -1204,6 +1266,9 @@ static void app_chassis_entry(void *argument)
                      app_chassis_ctx.cfg.min_online_motors))
                        ? 1U
                        : 0U;
+        if ((dm_fault != 0U) && (app_chassis_dm_fault_since_ms == 0U)) {
+            app_chassis_dm_fault_mask = app_chassis_drive_mask(&input);
+        }
 #else
         dm_fault = 0U;
 #endif
@@ -1301,11 +1366,13 @@ uint8_t app_chassis_init(void)
     app_chassis_dm_enable_fail_count = 0U;
     app_chassis_dm_mode_ok_count = 0U;
     app_chassis_dm_mode_fail_count = 0U;
+    app_chassis_dm_fault_mask = 0U;
     for (uint32_t i = 0U; i < CHASSIS_DRIVE_MAX; i++) {
         app_chassis_dm_fb_min[i] = 0.0F;
         app_chassis_dm_fb_max[i] = 0.0F;
         app_chassis_dm_fb_seen[i] = 0U;
         app_chassis_dm_mode_value[i] = 0xFFFFFFFFU;
+        app_chassis_drive_offline_count[i] = 0U;
     }
 #endif
 
