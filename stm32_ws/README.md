@@ -38,9 +38,11 @@ Tasks -> Robot -> Apps -> Component -> Devices -> Bsp -> Boards
 
 | 选项 | 说明 | CAN 电机 |
 |---|---|---|
-| `sentry_2026` | 2026 哨兵，默认选项 | 使用 |
+| `sentry_2026` | 2026 哨兵整车（云台板），默认选项 | 使用 |
 | `sentry_2026_bringup` | 2026 哨兵台架：仅 Communication + USB 桥接 | 不启动 |
-| `can1_dmh6215_test` | CAN1 单电机 DMH6215 台架测试 | 仅 CAN1 |
+| `sentry_2026_chassis` | 底盘 DM6215 原生速度模式验证（同板启用底盘） | 四轮 DM6215 |
+| `can1_dmh6215_test` | CAN1 DMH6215 单轮/四轮台架测试 | 仅 CAN1 |
+| `can1_dmh6215_angle_test` | CAN1 单电机角度 PID 台架 | 仅 CAN1 |
 | `infantry_steer_2025` | 2025 舵轮步兵 | 使用 |
 | `board_only_dm02` | DM02 光板板载资源测试 | 不启动 |
 
@@ -242,8 +244,13 @@ openocd -f interface/cmsis-dap.cfg -f target/stm32h7x.cfg \
   `motor_mask=0x1E`、`TEC/REC=0`。
 - 2026-10-20 四轮悬空 `0.3 rad/s`、20 s 前进测试通过；前进符号为
   RR `-1`、FL `+1`、RL `+1`、FR `-1`。
-- DM 电机必须先读/写 `CTRL_MODE`（RID=10）并保存；速度模式的使能/失能
-  要发到 `ID + 0x200`，不能发在基础 ID。
+- DM 电机必须先写/读回并保存 `CTRL_MODE=3`（RID `0x0A`），再使能；
+  速度模式的使能/失能要发到 `ID + 0x200`，不能发在基础 ID。
+  反馈 `state` 字节高 4 位 `0=失能 / 1=使能`，不能只看反馈是否在线。
+- `sentry_2026_chassis` 已跑通四轮 DM 原生速度模式：2 ms 控制周期、轮端
+  `0.3 rad/s`、20 s，四轮净转约 ±6 rad；左后“在线但不动”的根因是
+  `CTRL_MODE` 丢失，启动时补写并读回后恢复正常。台架注入开关为
+  `APP_CHASSIS_BENCH_TEST`，上车前必须置 0。
 - `sentry_2026` 的 map/param 目前继承 `infantry_steer_2025`，实车接线、电机 ID 和 PID 参数需要按哨兵硬件标定。
-- 全功能 `sentry_2026` 目前在台架上卡在 `app_observe_init`（IMU/observer 初始化失败）；台架调试请使用 `sentry_2026_bringup`。
+- 全功能 `sentry_2026` 在 2026-10-19 台架上曾卡在 `app_observe_init`（IMU/observer 初始化失败）；台架调试仍建议使用 `sentry_2026_bringup`。后续 IMU MVP 修改后需重新验证。
 - 已确认 HAL tick 优先级必须为 0，否则 FreeRTOS 启动前的 `BASEPRI=0x50` 会屏蔽 TIM6，导致 `HAL_Delay` 卡死。

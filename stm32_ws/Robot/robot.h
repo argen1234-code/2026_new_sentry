@@ -41,10 +41,14 @@ extern "C" {
 #include "sentry_2026.h"
 #elif ROBOT_TARGET == ROBOT_TARGET_SENTRY_2026_BRINGUP
 #include "sentry_2026_bringup.h"
+#elif ROBOT_TARGET == ROBOT_TARGET_SENTRY_2026_CHASSIS
+#include "sentry_2026_chassis.h"
 #elif ROBOT_TARGET == ROBOT_TARGET_BOARD_ONLY_DM02
 #include "board_only_dm02.h"
 #elif ROBOT_TARGET == ROBOT_TARGET_CAN1_DMH6215_TEST
 #include "can1_dmh6215_test.h"
+#elif ROBOT_TARGET == ROBOT_TARGET_CAN1_DMH6215_ANGLE_TEST
+#include "can1_dmh6215_angle_test.h"
 #else
 #error "Unknown ROBOT_TARGET. Please add a Robot target and select it in Robot/robot.h."
 #endif

@@ -441,11 +441,20 @@ static uint8_t app_cali_save(void)
 /**
  * @brief 执行 IMU 校准并保存记录。
  */
+static volatile uint8_t app_cali_imu_busy;
+
+uint8_t app_calibration_is_busy(void)
+{
+    return app_cali_imu_busy;
+}
+
 static void app_cali_do_imu(void)
 {
     imu_status_t status;
 
+    app_cali_imu_busy = 1U;
     status = imu_calibrate();
+    app_cali_imu_busy = 0U;
     app_cali_diag.imu_status = (int32_t)status;
     if (status != IMU_OK) {
         app_cali_diag.save_fail_count++;

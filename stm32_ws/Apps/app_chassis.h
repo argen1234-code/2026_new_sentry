@@ -45,6 +45,19 @@ typedef struct
     uint32_t send_count;                         /**< 电机发送成功次数。 */
     uint32_t send_fail_count;                    /**< 电机发送失败次数。 */
     uint32_t zero_count;                         /**< 输出被清零发送次数。 */
+    uint32_t cycle_overrun_count;                /**< 2 ms 周期 overrun 次数。 */
+    uint32_t dm_fault_count;                     /**< DM 故障锁存触发次数。 */
+    uint32_t dm_tx_drop_count;                   /**< DM 速度帧发送失败次数。 */
+    uint32_t dm_enable_count;                    /**< DM 使能帧发送成功次数。 */
+    uint32_t dm_enable_fail_count;               /**< DM 使能帧发送失败次数。 */
+    uint32_t dm_mode_ok_count;                   /**< CTRL_MODE 读回为 3 的电机数量。 */
+    uint32_t dm_mode_fail_count;                 /**< CTRL_MODE 读回不是 3 的电机数量。 */
+    uint32_t dm_mode_value[CHASSIS_DRIVE_MAX];   /**< 每轮读回的 CTRL_MODE，0xFFFFFFFF 表示未读到。 */
+    float32_t drive_speed_cmd[CHASSIS_DRIVE_MAX];/**< 最近一次驱动速度目标，m/s。 */
+    float32_t drive_speed_fb[CHASSIS_DRIVE_MAX]; /**< 最近一次驱动速度反馈，m/s。 */
+    float32_t drive_speed_fb_min[CHASSIS_DRIVE_MAX]; /**< 运行期间反馈速度最小值，m/s。 */
+    float32_t drive_speed_fb_max[CHASSIS_DRIVE_MAX]; /**< 运行期间反馈速度最大值，m/s。 */
+    uint8_t dm_fault_latched;                    /**< 非 0 表示 DM 故障已锁存。 */
     uint32_t last_tick_ms;                       /**< 最近一次周期 tick，单位 ms。 */
     uint32_t last_time_us;                       /**< 最近一次周期时间戳低 32 位，单位 us。 */
     ChassisStatus chassis_status;                /**< 最近一次 Chassis controller 状态。 */
@@ -115,6 +128,19 @@ uint8_t app_chassis_get_diag(AppChassisDiag *out);
  * @return 成功返回 1，参数非法返回 0。
  */
 uint8_t app_chassis_set_power(float32_t power, float32_t limit, float32_t buffer);
+
+/**
+ * @brief 判断底盘任务心跳是否在有效时间内。
+ *
+ * @param now_ms 当前时间，单位 ms。
+ * @return 非 0 表示心跳正常。
+ */
+uint8_t app_chassis_heartbeat_alive(uint32_t now_ms);
+
+/**
+ * @brief 请求底盘急停；下一次周期强制零输出并保持停止。
+ */
+void app_chassis_emergency_stop(void);
 
 #ifdef __cplusplus
 }

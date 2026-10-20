@@ -604,7 +604,7 @@ int bmi088_gyro_init(bmi088_t *dev)
     return error;
 }
 
-int bmi088_read(bmi088_t *dev)
+int bmi088_read_ex(bmi088_t *dev, uint8_t read_temp)
 {
     uint8_t buf[8] = {0};
     int16_t raw_temp;
@@ -646,13 +646,15 @@ int bmi088_read(bmi088_t *dev)
     if (buf[0] != BMI088_GYRO_CHIP_ID_VALUE) {
         /* @diff: 旧版 BMI088_Read 为 void，gyro ID 异常时只跳过 gyro 更新；
          *        新版仍更新温度并返回 BMI088_NO_SENSOR 供上层感知异常。 */
-        status = acc_read(dev, BMI088_TEMP_M, buf, 2U);
-        if (status != BMI088_STATUS_OK) {
-            return status;
-        }
+        if (read_temp != 0U) {
+            status = acc_read(dev, BMI088_TEMP_M, buf, 2U);
+            if (status != BMI088_STATUS_OK) {
+                return status;
+            }
 
-        raw_temp = temp_raw(buf);
-        dev->temperature = raw_temp * BMI088_TEMP_FACTOR + BMI088_TEMP_OFFSET;
+            raw_temp = temp_raw(buf);
+            dev->temperature = raw_temp * BMI088_TEMP_FACTOR + BMI088_TEMP_OFFSET;
+        }
         return BMI088_NO_SENSOR;
     }
 
@@ -665,15 +667,22 @@ int bmi088_read(bmi088_t *dev)
     raw_temp = (int16_t)(((int16_t)buf[7] << 8) | buf[6]);
     dev->gyro[2] = raw_temp * dev->gyro_sen - dev->gyro_offset[2];
 
-    status = acc_read(dev, BMI088_TEMP_M, buf, 2U);
-    if (status != BMI088_STATUS_OK) {
-        return status;
+    if (read_temp != 0U) {
+        status = acc_read(dev, BMI088_TEMP_M, buf, 2U);
+        if (status != BMI088_STATUS_OK) {
+            return status;
+        }
+
+        raw_temp = temp_raw(buf);
+        dev->temperature = raw_temp * BMI088_TEMP_FACTOR + BMI088_TEMP_OFFSET;
     }
 
-    raw_temp = temp_raw(buf);
-    dev->temperature = raw_temp * BMI088_TEMP_FACTOR + BMI088_TEMP_OFFSET;
-
     return BMI088_STATUS_OK;
+}
+
+int bmi088_read(bmi088_t *dev)
+{
+    return bmi088_read_ex(dev, 1U);
 }
 
 /**

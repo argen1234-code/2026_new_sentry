@@ -26,7 +26,7 @@
 
 当前仓库是母仓库。具体车辆通过 `Robot` target 表达，不在底层模块中写死“某兵种一定如何接线、某设备一定服务某控制语义”。
 
-`_ref` 只作为旧工程参考来源，不参与当前工程构建，不允许从新工程源码 include `_ref` 中的头文件。
+`old_stm32_code_reference/` 只作为旧工程参考来源，不参与当前工程构建，不允许从新工程源码 include 其中的头文件。
 
 ### 2.2 实现原则
 
@@ -719,15 +719,17 @@ Devices/Motor 内写死某车型的控制策略。
 
 ## 12. 工程构建与调试环境
 
-### 12.1 Keil 工程
+### 12.1 CMake 与 Keil
 
-当前主要工程文件：
+日常构建以 CMake + Ninja + arm-none-eabi-gcc 为准：
 
-````text
-Boards/MDK-ARM/CtrlBoard-H7_IMU.uvprojx
+````bash
+cd Boards
+cmake --preset Debug
+cmake --build --preset Debug
 ````
 
-编译以 Keil 工程配置为准。
+Keil 工程仍保留在 `Boards/MDK-ARM/CtrlBoard-H7_IMU.uvprojx`，用于对照和应急，不作为主构建入口。
 
 ### 12.2 工程文件
 
@@ -742,24 +744,29 @@ Keil、CMake 和 include path 应与源码结构同步维护。
 
 ### 12.3 调试和烧录
 
-当前默认烧录器为 J-Link，USB CDC 调试串口当前接入为 COM34。
+当前默认调试器为 CMSIS-DAP（DAPLink v2），烧录使用 OpenOCD：
+
+````bash
+openocd -f interface/cmsis-dap.cfg -f target/stm32h7x.cfg \
+  -c "program build/Debug/CtrlBoard-H7_IMU.elf verify reset exit"
+````
 
 要求：
 
 1. 调试日志优先走 `Component/Debug` 和 `Component/Communication`。
 2. 不新增 App 专用调试三件套。
 3. 不把 USB/串口调试通道接入控制安全链路。
-4. 烧录和串口调试路径属于本机环境事实，不应写进底层通用模块。
+4. 烧录器型号、串口号和本机路径属于现场环境事实，不应写进底层通用模块。
 
 ### 12.4 Git 使用
 
-当前仓库不以 git 工作流作为操作前提。
+仓库使用 git 管理提交历史，但源码事实以工作区文件为准。
 
 要求：
 
-1. 不使用 `git reset`、`git checkout` 等命令恢复文件。
-2. 不依赖 git 状态判断源码事实。
-3. 需要比较或审查时，直接读取当前工作区文件。
+1. 需要比较或审查时，直接读取当前工作区文件，不依赖缓存或旧提交猜测现状。
+2. 提交前检查 `git status` 和 `git diff`，确认没有把构建产物或本机配置带入。
+3. 不使用 `git reset`、`git checkout` 等命令随意丢弃未提交改动。
 
 ## 13. 文件编码
 
@@ -847,19 +854,19 @@ float speed;
 
 ## 15. 迁移与兼容规则
 
-### 15.1 `_ref` 使用边界
+### 15.1 参考工程使用边界
 
-`_ref` 只能作为阅读和迁移参考，不作为新工程依赖。
+`old_stm32_code_reference/` 只能作为阅读和迁移参考，不作为新工程依赖。
 
 允许：
 
-1. 阅读 `_ref` 对照业务语义。
+1. 阅读参考工程对照业务语义。
 2. 将有价值的控制逻辑迁移到新分层中的合适位置。
-3. 在注释或文档中说明某参数来源于 `_ref`。
+3. 在注释或文档中说明某参数来源于参考工程。
 
 禁止：
 
-1. 新源码 include `_ref` 头文件。
+1. 新源码 include 参考工程头文件。
 2. 保留旧任务式 API 作为兼容入口。
 3. 为了兼容旧全局变量而增加 wrapper。
 4. 把旧 weak hook、旧全局 getter、旧任务循环原样搬入新工程。

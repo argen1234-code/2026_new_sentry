@@ -18,11 +18,14 @@
 
 #include "imu.h"
 
+#include "main.h"
 #include "bsp_dwt.h"
 #include "bsp_gpio.h"
 #include "bsp_spi.h"
 #include "imu_bmi088.h"
 #include "robot_board.h"
+
+#include <math.h>
 
 /* ==========================================================================
  * 依赖与私有配置
@@ -50,6 +53,27 @@ static imu_sample_t imu_last_sample;
  * @brief IMU 是否已经完成初始化。
  */
 static uint8_t imu_ready;
+
+/** @brief 温度读取周期，单位 ms。 */
+#define IMU_TEMP_PERIOD_MS 100U
+
+/** @brief 连续读取错误达到该值时判定 IMU 失效。 */
+#define IMU_ERR_DEBOUNCE 20U
+
+/** @brief 读取/标定互斥忙标志。 */
+static volatile uint8_t imu_busy;
+
+/** @brief 最近一次温度读取时间，单位 ms。 */
+static uint32_t imu_last_temp_ms;
+
+/** @brief 连续读取错误计数。 */
+static uint32_t imu_err_count;
+
+/** @brief 最近一次成功读取时间，单位 ms。 */
+static uint32_t imu_last_ok_ms;
+
+/** @brief 最近一次底层读取状态。 */
+static int32_t imu_last_status;
 
 /**
  * @brief 板级 BMI088 默认标定参数。
@@ -215,6 +239,56 @@ static imu_status_t conv_status(int status)
 }
 
 /**
+ * @brief 进入 IMU 短临界区。
+ *
+ * @return 进入前的 PRIMASK。
+ */
+static uint32_t imu_critical_enter(void)
+{
+    uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    return primask;
+}
+
+/**
+ * @brief 退出 IMU 短临界区。
+ *
+ * @param primask 进入前的 PRIMASK。
+ */
+static void imu_critical_exit(uint32_t primask)
+{
+    __set_PRIMASK(primask);
+}
+
+/**
+ * @brief 尝试占用 IMU 读/标定互斥。
+ *
+ * @return 非 0 表示占用成功。
+ */
+static uint8_t imu_try_begin(void)
+{
+    uint32_t primask = imu_critical_enter();
+    uint8_t ok = 0U;
+
+    if (imu_busy == 0U) {
+        imu_busy = 1U;
+        ok = 1U;
+    }
+    imu_critical_exit(primask);
+    return ok;
+}
+
+/**
+ * @brief 释放 IMU 读/标定互斥。
+ */
+static void imu_end(void)
+{
+    uint32_t primask = imu_critical_enter();
+    imu_busy = 0U;
+    imu_critical_exit(primask);
+}
+
+/**
  * @brief 从 BMI088 对象刷新抽象采样缓存。
  */
 static void update_sample(void)
@@ -367,6 +441,12 @@ imu_status_t imu_init(uint8_t calibrate)
 {
     int status;
 
+    imu_busy = 0U;
+    imu_err_count = 0U;
+    imu_last_status = BMI088_STATUS_OK;
+    imu_last_temp_ms = HAL_GetTick();
+    imu_last_ok_ms = imu_last_temp_ms;
+
     if (res_ok() != BMI088_STATUS_OK) {
         return IMU_ERR_IO;
     }
@@ -384,6 +464,10 @@ imu_status_t imu_init(uint8_t calibrate)
     }
 
     imu_ready = 1U;
+    imu_err_count = 0U;
+    imu_last_status = BMI088_STATUS_OK;
+    imu_last_ok_ms = HAL_GetTick();
+    imu_last_temp_ms = imu_last_ok_ms;
     update_sample();
     return IMU_OK;
 }
@@ -391,22 +475,49 @@ imu_status_t imu_init(uint8_t calibrate)
 imu_status_t imu_read(void)
 {
     int status;
+    uint32_t now_ms;
+    uint8_t read_temp;
 
     if (imu_ready == 0U) {
         return IMU_ERR_NOT_READY;
     }
 
+    if (imu_try_begin() == 0U) {
+        /* 标定或另一任务正在占用 SPI。 */
+        return IMU_ERR_NOT_READY;
+    }
+
     if (res_ok() != BMI088_STATUS_OK) {
+        imu_end();
         return IMU_ERR_IO;
     }
 
-    status = bmi088_read(&imu_bmi088);
+    now_ms = HAL_GetTick();
+    read_temp = ((uint32_t)(now_ms - imu_last_temp_ms) >= IMU_TEMP_PERIOD_MS) ? 1U : 0U;
+
+    status = bmi088_read_ex(&imu_bmi088, read_temp);
     if (status != BMI088_STATUS_OK) {
-        return conv_status(status);
+        /* 一次重试；连续失败由 debounce 计数处理。 */
+        status = bmi088_read_ex(&imu_bmi088, read_temp);
     }
 
-    update_sample();
-    return IMU_OK;
+    imu_last_status = status;
+    if (status == BMI088_STATUS_OK) {
+        if (read_temp != 0U) {
+            imu_last_temp_ms = now_ms;
+        }
+        imu_last_ok_ms = now_ms;
+        imu_err_count = 0U;
+        update_sample();
+    } else {
+        imu_err_count++;
+        if (imu_err_count >= IMU_ERR_DEBOUNCE) {
+            imu_ready = 0U;
+        }
+    }
+
+    imu_end();
+    return conv_status(status);
 }
 
 imu_status_t imu_calibrate(void)
@@ -417,12 +528,19 @@ imu_status_t imu_calibrate(void)
         return IMU_ERR_NOT_READY;
     }
 
+    if (imu_try_begin() == 0U) {
+        return IMU_ERR_NOT_READY;
+    }
+
     if (res_ok() != BMI088_STATUS_OK) {
+        imu_end();
         return IMU_ERR_IO;
     }
 
     status = bmi088_calibrate(&imu_bmi088);
+    imu_last_status = status;
     if (status != BMI088_STATUS_OK) {
+        imu_end();
         return conv_status(status);
     }
 
@@ -435,17 +553,32 @@ imu_status_t imu_calibrate(void)
     imu_bmi088_default_cal.g_norm = imu_bmi088.g_norm;
     imu_bmi088_default_cal.temp_when_cali = imu_bmi088.temp_when_cali;
     imu_bmi088_default_cal.accel_offset_enabled = imu_bmi088.accel_offset_enabled;
+    imu_last_ok_ms = HAL_GetTick();
+    imu_err_count = 0U;
     update_sample();
+    imu_end();
     return IMU_OK;
 }
 
 imu_status_t imu_set_cali(const ImuCali *cali)
 {
+    uint32_t i;
+
     if (cali == NULL) {
         return IMU_ERR_ARG;
     }
-    if (cali->g_norm <= 1.0f) {
+    if ((isfinite(cali->g_norm) == 0) || (cali->g_norm <= 1.0f)) {
         return IMU_ERR_ARG;
+    }
+    for (i = 0U; i < 3U; i++) {
+        if ((isfinite(cali->gyro_offset[i]) == 0) ||
+            (isfinite(cali->accel_offset[i]) == 0)) {
+            return IMU_ERR_ARG;
+        }
+    }
+
+    if (imu_try_begin() == 0U) {
+        return IMU_ERR_NOT_READY;
     }
 
     cali_to_bmi088(&imu_bmi088_default_cal, cali);
@@ -454,15 +587,19 @@ imu_status_t imu_set_cali(const ImuCali *cali)
         update_sample();
     }
 
+    imu_end();
     return IMU_OK;
 }
 
 imu_status_t imu_get_cali(ImuCali *out)
 {
+    uint32_t primask;
+
     if (out == NULL) {
         return IMU_ERR_ARG;
     }
 
+    primask = imu_critical_enter();
     if (imu_ready != 0U) {
         bmi088_to_cali(out, &imu_bmi088);
     } else {
@@ -476,12 +613,15 @@ imu_status_t imu_get_cali(ImuCali *out)
         out->temp_when_cali = imu_bmi088_default_cal.temp_when_cali;
         out->accel_offset_enabled = imu_bmi088_default_cal.accel_offset_enabled;
     }
+    imu_critical_exit(primask);
 
     return IMU_OK;
 }
 
 imu_status_t imu_sample(imu_sample_t *out)
 {
+    uint32_t primask;
+
     if (out == NULL) {
         return IMU_ERR_ARG;
     }
@@ -490,7 +630,25 @@ imu_status_t imu_sample(imu_sample_t *out)
         return IMU_ERR_NOT_READY;
     }
 
+    primask = imu_critical_enter();
     *out = imu_last_sample;
+    imu_critical_exit(primask);
+    return IMU_OK;
+}
+
+imu_status_t imu_get_health(imu_health_t *out)
+{
+    uint32_t primask;
+
+    if (out == NULL) {
+        return IMU_ERR_ARG;
+    }
+
+    primask = imu_critical_enter();
+    out->err_count = imu_err_count;
+    out->last_ok_ms = imu_last_ok_ms;
+    out->last_status = imu_last_status;
+    imu_critical_exit(primask);
     return IMU_OK;
 }
 

@@ -623,6 +623,10 @@ static void app_daemon_poll_chassis(void)
 #if ROBOT_APP_ENABLE_CHASSIS != 0U
     AppChassisDiag diag;
 
+    if (app_chassis_heartbeat_alive(HAL_GetTick()) == 0U) {
+        app_chassis_emergency_stop();
+    }
+
     if (app_chassis_get_diag(&diag) == 0U) {
         app_daemon_diag.poll_fail_count++;
         return;

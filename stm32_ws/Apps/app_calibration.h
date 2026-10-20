@@ -128,6 +128,13 @@ uint8_t app_calibration_get_state(AppCalibrationState *out);
  */
 uint8_t app_calibration_get_diag(AppCalibrationDiag *out);
 
+/**
+ * @brief 判断 IMU 校准是否正在执行。
+ *
+ * @return 非 0 表示校准占用 IMU，底盘/云台应停止输出。
+ */
+uint8_t app_calibration_is_busy(void);
+
 #ifdef __cplusplus
 }
 #endif

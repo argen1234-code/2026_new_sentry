@@ -159,6 +159,35 @@ motor_status_t motor_dji_send(bsp_fdcan_id_t bus,
 motor_status_t motor_dm_mit(bsp_fdcan_id_t bus, uint16_t id, DmMotorModel model, const MitMotorCmd *cmd);
 
 /**
+ * @brief 发送达妙原生速度模式控制帧。
+ *
+ * @param bus FDCAN 总线标识。
+ * @param id 电机接收基础 ID。
+ * @param vel 目标速度，单位 rad/s。
+ * @return MotorOk 表示成功，否则返回错误原因。
+ */
+motor_status_t motor_dm_speed(bsp_fdcan_id_t bus, uint16_t id, float vel);
+
+/**
+ * @brief 向达妙速度模式控制 ID 发送特殊命令。
+ *
+ * @param bus FDCAN 总线标识。
+ * @param id 电机接收基础 ID。
+ * @param kind 达妙特殊命令。
+ * @return MotorOk 表示成功，否则返回错误原因。
+ */
+motor_status_t motor_dm_speed_cmd(bsp_fdcan_id_t bus, uint16_t id, DmMotorCmdKind kind);
+
+/**
+ * @brief 零速并失能达妙速度模式电机。
+ *
+ * @param bus FDCAN 总线标识。
+ * @param id 电机接收基础 ID。
+ * @return MotorOk 表示成功，否则返回错误原因。
+ */
+motor_status_t motor_dm_speed_stop(bsp_fdcan_id_t bus, uint16_t id);
+
+/**
  * @brief 发送达妙特殊命令帧。
  *
  * @param bus FDCAN 总线标识。
@@ -167,6 +196,39 @@ motor_status_t motor_dm_mit(bsp_fdcan_id_t bus, uint16_t id, DmMotorModel model,
  * @return MotorOk 表示成功，否则返回错误原因。
  */
 motor_status_t motor_dm_cmd(bsp_fdcan_id_t bus, uint16_t id, DmMotorCmdKind kind);
+
+/**
+ * @brief 发送达妙参数读/写/保存帧（广播 0x7FF）。
+ *
+ * @param bus FDCAN 总线标识。
+ * @param id 电机 ID。
+ * @param cmd 参数命令：0x33 读、0x55 写、0xAA 保存。
+ * @param rid 参数 RID。
+ * @param value 写入值，读命令传 0。
+ * @return MotorOk 表示成功，否则返回错误原因。
+ */
+motor_status_t motor_dm_param_cmd(bsp_fdcan_id_t bus,
+                                  uint16_t id,
+                                  uint8_t cmd,
+                                  uint8_t rid,
+                                  uint32_t value);
+
+/**
+ * @brief 获取参数应答序号，用于判断是否收到新的应答。
+ *
+ * @return 当前应答序号。
+ */
+uint32_t motor_dm_param_seq(void);
+
+/**
+ * @brief 读取最近一次参数应答。
+ *
+ * @param id 目标电机 ID。
+ * @param rid 目标参数 RID。
+ * @param value 应答值输出，可为空。
+ * @return 1 表示最近应答匹配，0 表示不匹配。
+ */
+uint8_t motor_dm_param_get(uint16_t id, uint8_t rid, uint32_t *value);
 
 /**
  * @brief 发送 RS 电机特殊命令帧。

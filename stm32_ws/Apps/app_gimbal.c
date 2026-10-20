@@ -19,6 +19,9 @@
 #include "app_gimbal_config.h"
 #include "app_input.h"
 #include "app_observe.h"
+#if ROBOT_APP_ENABLE_CALIBRATION != 0U
+#include "app_calibration.h"
+#endif
 #include "bsp_timebase.h"
 #include "debug.h"
 #include "main.h"
@@ -738,6 +741,13 @@ static void app_gimbal_fill_cmd(GimbalInput *input)
     if (app_input_get_gimbal_cmd(&input->cmd) == 0U) {
         (void)memset(&input->cmd, 0, sizeof(input->cmd));
     }
+#if ROBOT_APP_ENABLE_CALIBRATION != 0U
+    if (app_calibration_is_busy() != 0U) {
+        input->cmd.online = 0U;
+        input->cmd.yaw = 0.0F;
+        input->cmd.pitch = 0.0F;
+    }
+#endif
 }
 
 /**

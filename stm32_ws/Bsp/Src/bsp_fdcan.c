@@ -446,10 +446,11 @@ HAL_StatusTypeDef bsp_fdcan_start_default(void)
     return HAL_OK;
 }
 
-HAL_StatusTypeDef bsp_fdcan_send_std(FDCAN_HandleTypeDef *hfdcan,
-                                     uint16_t std_id,
-                                     const uint8_t *data,
-                                     uint8_t len)
+HAL_StatusTypeDef bsp_fdcan_send_std_timeout(FDCAN_HandleTypeDef *hfdcan,
+                                             uint16_t std_id,
+                                             const uint8_t *data,
+                                             uint8_t len,
+                                             uint32_t timeout_ms)
 {
     FDCAN_TxHeaderTypeDef tx_header;
     uint32_t dlc;
@@ -494,12 +495,21 @@ HAL_StatusTypeDef bsp_fdcan_send_std(FDCAN_HandleTypeDef *hfdcan,
                 g_bsp_fdcan_tx_wait_count++;
             }
 
-            if ((uint32_t)(HAL_GetTick() - start_tick) >= BSP_FDCAN_TX_TIMEOUT_MS) {
+            if ((uint32_t)(HAL_GetTick() - start_tick) >= timeout_ms) {
                 g_bsp_fdcan_tx_timeout_count++;
                 return HAL_TIMEOUT;
             }
         }
     }
+}
+
+HAL_StatusTypeDef bsp_fdcan_send_std(FDCAN_HandleTypeDef *hfdcan,
+                                     uint16_t std_id,
+                                     const uint8_t *data,
+                                     uint8_t len)
+{
+    return bsp_fdcan_send_std_timeout(hfdcan, std_id, data, len,
+                                      BSP_FDCAN_TX_TIMEOUT_MS);
 }
 
 uint8_t bsp_fdcan_dlc_to_length(uint32_t dlc)

@@ -150,6 +150,18 @@ bsp_status_t bsp_init(void)
     if (motor_init() != MotorOk) {
         return set_res(BSP_ERR_MOTOR, BSP_STEP_MOTOR, -1);
     }
+#if defined(ROBOT_TARGET_MOTOR_CHASSIS_DM_BIND) && (ROBOT_TARGET_MOTOR_CHASSIS_DM_BIND != 0U)
+    {
+        uint32_t i;
+        for (i = 0U; i < 4U; i++) {
+            if (motor_dm_bind(MOTOR_CHASSIS_BUS,
+                              (uint16_t)(ROBOT_TARGET_MOTOR_CHASSIS_DM_FB_ID_0 + i),
+                              DmMotor6215) != MotorOk) {
+                return set_res(BSP_ERR_MOTOR, BSP_STEP_MOTOR, -2);
+            }
+        }
+    }
+#endif
     (void)set_res(BSP_OK, BSP_STEP_MOTOR, 0);
 #endif
 

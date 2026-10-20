@@ -45,9 +45,19 @@ extern "C" {
 #define APP_CHASSIS_PERIOD_MS ROBOT_CHASSIS_CONTROL_TIME_MS
 #endif
 
-/** @brief DJI 底盘电机反馈超过该时间未更新则判定离线，单位 ms。 */
+/** @brief 底盘电机反馈超过该时间未更新则判定离线，单位 ms。 */
 #ifndef APP_CHASSIS_MOTOR_LOST_MS
 #define APP_CHASSIS_MOTOR_LOST_MS 100U
+#endif
+
+/** @brief 底盘任务心跳超过该时间未更新则判定任务卡死，单位 ms。 */
+#ifndef APP_CHASSIS_CMD_STALE_MS
+#define APP_CHASSIS_CMD_STALE_MS 20U
+#endif
+
+/** @brief 非 0 表示底盘控制必须等待云台 ready；独立底盘 target 置 0。 */
+#ifndef APP_CHASSIS_REQUIRE_GIMBAL_READY
+#define APP_CHASSIS_REQUIRE_GIMBAL_READY 1U
 #endif
 
 #ifdef __cplusplus

@@ -1,6 +1,6 @@
 # Jetson ↔ STM32 通信协议（草案）
 
-> 状态：草案，尚未冻结。协议事实源最终以 STM32 侧 `communication_host_schema.hpp` 为准，ROS 侧 `sentry_msgs` 与之保持字段一致。
+> 状态：草案，尚未冻结。协议事实源最终以 STM32 侧 `communication_host_schema.hpp` 为准，ROS 侧 `sentry_interfaces` 与之保持字段一致。
 
 ## 1. 物理链路
 
@@ -68,26 +68,26 @@
 2. 执行：
 
    ```bash
-   python tools/Printk-Protocol/generate.py \
+   python stm32_ws/Tools/Printk-Protocol/generate.py \
        stm32_ws/Component/Communication/Src/communication_host_schema.hpp \
        --out-dir stm32_ws/Component/Communication/Src/Generate
    ```
 
 3. 生成产物提交到仓库，禁止手改 `Generate/` 下的文件。
-4. 同步更新 `ros_ws/src/sentry_msgs/msg/` 中的对应消息定义，并补充一致性测试。
+4. 同步更新 `ros_ws/src/sentry_interfaces/msg/` 中的对应消息定义，并补充一致性测试。
 
 ## 6. ROS 侧映射
 
 | 协议消息 | ROS 消息 | 方向 |
 |---|---|---|
-| `GimbalCmd` | `sentry_msgs/msg/GimbalCmd` | ROS → STM32 |
-| `ChassisCmd` | `sentry_msgs/msg/ChassisCmd` | ROS → STM32 |
-| `ShootCmd` | `sentry_msgs/msg/ShootCmd` | ROS → STM32 |
-| `RobotState` | `sentry_msgs/msg/RobotState` | STM32 → ROS |
-| `RefereeState` | `sentry_msgs/msg/RefereeState` | STM32 → ROS |
-| `ErrorReport` | `sentry_msgs/msg/ErrorReport` | STM32 → ROS |
+| `GimbalCmd` | `sentry_interfaces/msg/GimbalCmd` | ROS → STM32 |
+| `ChassisCmd` | `sentry_interfaces/msg/ChassisCmd` | ROS → STM32 |
+| `ShootCmd` | `sentry_interfaces/msg/ShootCmd` | ROS → STM32 |
+| `RobotState` | `sentry_interfaces/msg/RobotState` | STM32 → ROS |
+| `RefereeState` | `sentry_interfaces/msg/RefereeState` | STM32 → ROS |
+| `ErrorReport` | `sentry_interfaces/msg/ErrorReport` | STM32 → ROS |
 
-串口桥节点 `sentry_devices/serial_bridge` 负责帧收发、校验、时间戳与 topic 转换，其它包不直接操作串口。
+USB 桥节点 `sentry_hardware/usb_bridge` 负责帧收发、校验、时间戳与 topic 转换，其它包不直接操作串口/USB。
 
 ## 7. USB CDC 桥接（已实现）
 

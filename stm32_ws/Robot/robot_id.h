@@ -30,8 +30,10 @@ extern "C" {
 #define ROBOT_TARGET_INFANTRY_STEER_2025          0x0101U /**< 2025 舵轮步兵。 */
 #define ROBOT_TARGET_SENTRY_2026                  0x0401U /**< 2026 哨兵（DM02 云台板基线）。 */
 #define ROBOT_TARGET_SENTRY_2026_BRINGUP          0x0402U /**< 2026 哨兵台架，仅 Communication + USB。 */
+#define ROBOT_TARGET_SENTRY_2026_CHASSIS          0x0403U /**< 2026 哨兵底盘验证，DM6215 原生速度模式。 */
 #define ROBOT_TARGET_BOARD_ONLY_DM02              0x7F01U /**< DM02 光板板载资源测试。 */
 #define ROBOT_TARGET_CAN1_DMH6215_TEST            0x7F02U /**< CAN1 单电机 DMH6215 台架测试。 */
+#define ROBOT_TARGET_CAN1_DMH6215_ANGLE_TEST      0x7F03U /**< CAN1 单电机 DMH6215 角度 PID 台架测试。 */
 
 /* ==========================================================================
  * 机器人角色

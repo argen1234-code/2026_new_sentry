@@ -138,6 +138,21 @@ HAL_StatusTypeDef bsp_fdcan_send_std(FDCAN_HandleTypeDef *hfdcan,
                                      uint8_t len);
 
 /**
+ * @brief 发送标准 ID Classic CAN 数据帧，并指定 FIFO 满时的最大等待时间。
+ * @param hfdcan HAL FDCAN 句柄。
+ * @param std_id 标准 CAN ID，范围 0x000-0x7FF。
+ * @param data 发送数据指针；len 为 0 时可为 NULL。
+ * @param len 数据长度，Classic CAN 最大 8 字节。
+ * @param timeout_ms FIFO 满时的最大等待时间；0 表示不等待。
+ * @return HAL 执行状态。
+ */
+HAL_StatusTypeDef bsp_fdcan_send_std_timeout(FDCAN_HandleTypeDef *hfdcan,
+                                             uint16_t std_id,
+                                             const uint8_t *data,
+                                             uint8_t len,
+                                             uint32_t timeout_ms);
+
+/**
  * @brief 将 FDCAN DLC 转换为字节长度。
  * @param dlc HAL FDCAN DLC 宏值。
  * @return 对应字节长度；未知 DLC 返回 0。

@@ -23,6 +23,9 @@
 #if ROBOT_APP_ENABLE_CAN_TEST != 0U
 #include "app_can_test.h"
 #endif
+#if defined(ROBOT_APP_ENABLE_ANGLE_TEST) && (ROBOT_APP_ENABLE_ANGLE_TEST != 0U)
+#include "app_angle_test.h"
+#endif
 #if ROBOT_APP_ENABLE_ALARM != 0U
 #include "app_alarm.h"
 #endif
@@ -146,6 +149,10 @@ uint8_t task_main_init(void)
     if (app_alarm_init() == 0U) {
         return 0U;
     }
+#endif
+
+#if defined(ROBOT_APP_ENABLE_ANGLE_TEST) && (ROBOT_APP_ENABLE_ANGLE_TEST != 0U)
+    app_angle_test_init();
 #endif
 
     return 1U;

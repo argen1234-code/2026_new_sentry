@@ -54,6 +54,16 @@ typedef struct
 } imu_sample_t;
 
 /**
+ * @brief IMU 健康状态。
+ */
+typedef struct
+{
+    uint32_t err_count;   /**< 连续读取错误计数。 */
+    uint32_t last_ok_ms;  /**< 最近一次成功读取时间，单位 ms。 */
+    int32_t last_status;  /**< 最近一次底层状态。 */
+} imu_health_t;
+
+/**
  * @brief IMU 标定参数。
  */
 typedef struct
@@ -119,6 +129,14 @@ imu_status_t imu_get_cali(ImuCali *out);
  * @return 返回 IMU 设备状态。
  */
 imu_status_t imu_sample(imu_sample_t *out);
+
+/**
+ * @brief 获取 IMU 健康状态。
+ *
+ * @param out 健康状态输出。
+ * @return 返回 IMU 设备状态。
+ */
+imu_status_t imu_get_health(imu_health_t *out);
 
 /**
  * @brief 获取 IMU 默认标定温度。

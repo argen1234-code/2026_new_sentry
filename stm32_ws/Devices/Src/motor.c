@@ -18,6 +18,9 @@
 
 #include <string.h>
 
+/** @brief DM 速度模式发送的 TX FIFO 最大等待时间，单位 ms。 */
+#define MOTOR_DM_SPEED_TX_TIMEOUT_MS 1U
+
 /* ==========================================================================
  * 依赖与私有配置
  * --------------------------------------------------------------------------
@@ -78,6 +81,21 @@ static const motor_bus_cfg_t motor_bus_cfg[] = {
  * @brief 板端电机状态表，索引与 bsp_fdcan_id_t 一致。
  */
 static motor_bus_state_t motor_state[BSP_FDCAN_ID_COUNT];
+
+/** @brief 达妙参数帧广播 CAN ID。 */
+#define MOTOR_DM_PARAM_BROADCAST_ID 0x7FFU
+
+/** @brief 达妙参数应答最近一次的电机 ID。 */
+static volatile uint32_t motor_dm_param_id;
+
+/** @brief 达妙参数应答最近一次的参数 RID。 */
+static volatile uint8_t motor_dm_param_rid;
+
+/** @brief 达妙参数应答最近一次的数值。 */
+static volatile uint32_t motor_dm_param_value;
+
+/** @brief 达妙参数应答序号，用于区分新应答与旧缓存。 */
+static volatile uint32_t motor_dm_param_seq_counter;
 
 /** @brief 云台 DJI 高组最近一次发送槽位。 */
 static motor_gimbal_group_t motor_gimbal_cache;
@@ -236,6 +254,40 @@ static motor_status_t send_8(bsp_fdcan_id_t bus, uint16_t id, const uint8_t data
 }
 
 /**
+ * @brief 带超时的 8 字节标准 CAN 帧发送。
+ *
+ * @param bus FDCAN 总线标识。
+ * @param id 标准 CAN ID。
+ * @param data 数据区。
+ * @param timeout_ms FIFO 满时的最大等待时间。
+ * @return 电机设备状态。
+ */
+static motor_status_t send_8_timeout(bsp_fdcan_id_t bus,
+                                     uint16_t id,
+                                     const uint8_t data[8],
+                                     uint32_t timeout_ms)
+{
+    FDCAN_HandleTypeDef *hfdcan;
+
+    if (data == NULL) {
+        return MotorNull;
+    }
+
+    if (bus_valid(bus) == 0U) {
+        return MotorArg;
+    }
+
+    hfdcan = bsp_fdcan_handle(bus);
+    if (hfdcan == NULL) {
+        return MotorHal;
+    }
+
+    return (bsp_fdcan_send_std_timeout(hfdcan, id, data, 8U, timeout_ms) == HAL_OK)
+               ? MotorOk
+               : MotorHal;
+}
+
+/**
  * @brief 解析一帧 DJI 反馈并写入状态表。
  *
  * @param bus FDCAN 总线标识。
@@ -321,6 +373,24 @@ static void motor_rx_cb(FDCAN_HandleTypeDef *hfdcan,
     len = bsp_fdcan_dlc_to_length(rx_header->DataLength);
     rx_id = (uint16_t)rx_header->Identifier;
     now = HAL_GetTick();
+
+    /*
+     * 达妙参数应答不是正常反馈：data[1]=0 且 data[2] 为 0x33/0x55/0xAA。
+     * 单独记录最近一次应答，供启动时读取 CTRL_MODE 使用。
+     */
+    if ((len >= 8U) &&
+        (rx_id >= MOTOR_MIT_FB_FIRST) && (rx_id <= MOTOR_MIT_FB_LAST) &&
+        (rx_data[0] == (uint8_t)(rx_id - 0x50U)) &&
+        (rx_data[1] == 0U) &&
+        ((rx_data[2] == 0x33U) || (rx_data[2] == 0x55U) || (rx_data[2] == 0xAAU))) {
+        motor_dm_param_id = (uint32_t)rx_data[0];
+        motor_dm_param_rid = rx_data[3];
+        motor_dm_param_value = (uint32_t)rx_data[4] |
+                               ((uint32_t)rx_data[5] << 8) |
+                               ((uint32_t)rx_data[6] << 16) |
+                               ((uint32_t)rx_data[7] << 24);
+        motor_dm_param_seq_counter++;
+    }
 
     if ((rx_id >= MOTOR_DJI_FB_FIRST) && (rx_id <= MOTOR_DJI_FB_LAST)) {
         decode_dji(bus, rx_id, rx_data, len, now);
@@ -495,6 +565,46 @@ motor_status_t motor_dm_mit(bsp_fdcan_id_t bus, uint16_t id, DmMotorModel model,
     return send_8(bus, (uint16_t)(id + MIT_MOTOR_MODE_MIT), data);
 }
 
+motor_status_t motor_dm_speed(bsp_fdcan_id_t bus, uint16_t id, float vel)
+{
+    uint8_t data[8];
+    MitMotorStatus status;
+
+    status = dm_motor_speed(data, vel);
+    if (status != MitMotorOk) {
+        return mit_status(status);
+    }
+
+    return send_8_timeout(bus, (uint16_t)(id + MIT_MOTOR_MODE_SPEED), data,
+                          MOTOR_DM_SPEED_TX_TIMEOUT_MS);
+}
+
+motor_status_t motor_dm_speed_cmd(bsp_fdcan_id_t bus, uint16_t id, DmMotorCmdKind kind)
+{
+    uint8_t data[8];
+    MitMotorStatus status;
+
+    status = dm_motor_cmd(data, kind);
+    if (status != MitMotorOk) {
+        return mit_status(status);
+    }
+
+    return send_8_timeout(bus, (uint16_t)(id + MIT_MOTOR_MODE_SPEED), data,
+                          MOTOR_DM_SPEED_TX_TIMEOUT_MS);
+}
+
+motor_status_t motor_dm_speed_stop(bsp_fdcan_id_t bus, uint16_t id)
+{
+    motor_status_t status;
+
+    status = motor_dm_speed(bus, id, 0.0F);
+    if (status != MotorOk) {
+        return status;
+    }
+
+    return motor_dm_speed_cmd(bus, id, DmMotorDisable);
+}
+
 motor_status_t motor_dm_cmd(bsp_fdcan_id_t bus, uint16_t id, DmMotorCmdKind kind)
 {
     uint8_t data[8];
@@ -506,6 +616,44 @@ motor_status_t motor_dm_cmd(bsp_fdcan_id_t bus, uint16_t id, DmMotorCmdKind kind
     }
 
     return send_8(bus, id, data);
+}
+
+motor_status_t motor_dm_param_cmd(bsp_fdcan_id_t bus,
+                                  uint16_t id,
+                                  uint8_t cmd,
+                                  uint8_t rid,
+                                  uint32_t value)
+{
+    uint8_t data[8];
+
+    data[0] = (uint8_t)id;
+    data[1] = (uint8_t)(id >> 8);
+    data[2] = cmd;
+    data[3] = rid;
+    data[4] = (uint8_t)value;
+    data[5] = (uint8_t)(value >> 8);
+    data[6] = (uint8_t)(value >> 16);
+    data[7] = (uint8_t)(value >> 24);
+
+    return send_8_timeout(bus, MOTOR_DM_PARAM_BROADCAST_ID, data, 10U);
+}
+
+uint32_t motor_dm_param_seq(void)
+{
+    return motor_dm_param_seq_counter;
+}
+
+uint8_t motor_dm_param_get(uint16_t id, uint8_t rid, uint32_t *value)
+{
+    if ((motor_dm_param_id != (uint32_t)id) || (motor_dm_param_rid != rid)) {
+        return 0U;
+    }
+
+    if (value != NULL) {
+        *value = motor_dm_param_value;
+    }
+
+    return 1U;
 }
 
 motor_status_t motor_rs_cmd(bsp_fdcan_id_t bus, uint16_t id, RsMotorCmdKind kind)

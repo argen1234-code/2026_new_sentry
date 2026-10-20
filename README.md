@@ -15,28 +15,24 @@ RoboMaster 2026 哨兵机器人工程。工程分层沿用 `2026_old_sentry` 的
 
 ## 分层映射
 
-| old_sentry 层 | ROS 侧 | STM32 侧 |
+| 职责 | ROS 侧 | STM32 侧 |
 |---|---|---|
-| `Algorithm` | `sentry_algorithm` | `Algorithm` |
-| `Bsp` + `Devices` | `sentry_devices` | `Bsp` + `Devices` |
-| `Component/Controller` | `sentry_control` | `Component/Controller` |
-| `Component/Input`、`Aim`、`Observer` | `sentry_perception` | `Component/Input`、`Aim`、`Observer` |
-| `Component/Communication` | `sentry_msgs` + `sentry_devices`（串口桥） | `Component/Communication` |
-| `Component/Debug`、`Ui` | `sentry_tools` | `Component/Debug`、`Ui` |
-| `Apps` | `sentry_decision`（行为编排） | `Apps` |
-| `Robot` | `sentry_robot`（YAML 配置） | `Robot` |
-| `Tasks` | `sentry_bringup`（launch 编排） | `Tasks` |
-| `Tools` | `sentry_tools` | `Tools` |
+| 纯算法 | `sentry_decision` / `sentry_navigation` 内部算法 | `Algorithm` |
+| 设备与驱动 | `sentry_hardware`（雷达、串口、USB 桥） | `Bsp` + `Devices` |
+| 控制 | `sentry_navigation`（Nav2 控制器） | `Component/Controller` |
+| 感知与输入 | `sentry_perception` | `Component/Input`、`Aim`、`Observer` |
+| 通信 | `sentry_hardware/usb_bridge` + `sentry_interfaces` | `Component/Communication` |
+| 编排与启动 | `sentry_bringup`、`sentry_decision` | `Apps`、`Tasks` |
+| 配置 | `ros_ws/config/` | `Robot/` |
 
 ## 主数据流
 
 ```text
-相机 / 雷达
+相机 / MID360
     -> sentry_perception
     -> sentry_localization / sentry_navigation
     -> sentry_decision
-    -> sentry_control
-    -> sentry_devices (serial bridge)
+    -> sentry_hardware/usb_bridge
     -> STM32: Component/Communication
     -> Apps (Input / Gimbal / Shoot / Chassis)
     -> Devices/Motor
@@ -48,19 +44,19 @@ STM32 状态回传：
 Devices/Imu + Devices/Referee + Devices/Motor
     -> Apps/app_observe, app_referee
     -> Component/Communication
-    -> sentry_devices (serial bridge)
+    -> sentry_hardware/usb_bridge
     -> sentry_localization / sentry_decision
 ```
 
 ## 快速开始
 
-ROS 2 工作空间：
+ROS 2 工作空间（Jetson 8 GiB 必须用低内存脚本，避免 OOM 卡死）：
 
 ```bash
 cd ros_ws
 source /opt/ros/jazzy/setup.bash
-colcon build --symlink-install
-source install/setup.bash
+./scripts/build_lowmem.sh
+source install/local_setup.bash
 ```
 
 STM32 固件：见 [`stm32_ws/README.md`](stm32_ws/README.md) 和 [`docs/build.md`](docs/build.md)。
@@ -70,9 +66,10 @@ STM32 固件：见 [`stm32_ws/README.md`](stm32_ws/README.md) 和 [`docs/build.m
 - [`docs/architecture.md`](docs/architecture.md)：分层、依赖方向、字段所有权
 - [`docs/protocol.md`](docs/protocol.md)：Jetson ↔ STM32 通信协议草案
 - [`docs/build.md`](docs/build.md)：构建、烧录、部署
-- [`docs/hardware.md`](docs/hardware.md)：底盘、电机 CAN 映射与方向约定
-- [`ros_ws/README.md`](ros_ws/README.md)：ROS 功能包职责
-- [`stm32_ws/README.md`](stm32_ws/README.md)：固件分层与 target 约定
+- [`docs/hardware.md`](docs/hardware.md)：底盘、电机 CAN 映射、控制模式与方向约定
+- [`docs/boot-fix.md`](docs/boot-fix.md)：MID360 插入时 Jetson 开机卡住的修复
+- [`ros_ws/README.md`](ros_ws/README.md)：ROS 功能包职责、低内存构建、MID360 网络
+- [`stm32_ws/README.md`](stm32_ws/README.md)：固件分层、target 约定与台架流程
 
 ## 开发原则
 

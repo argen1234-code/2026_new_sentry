@@ -197,6 +197,15 @@ int bmi088_calibrate(bmi088_t *dev);
  */
 int bmi088_read(bmi088_t *dev);
 
+/**
+ * @brief 读取 BMI088 当前测量值，可选择是否读取温度。
+ *
+ * @param dev 设备对象。
+ * @param read_temp 非 0 表示本次读取温度；0 表示复用设备对象中的上次温度。
+ * @return `BMI088_STATUS_INVALID_ARG`、`BMI088_STATUS_PORT_ERROR`、`BMI088_NO_SENSOR` 或 `BMI088_STATUS_OK`。
+ */
+int bmi088_read_ex(bmi088_t *dev, uint8_t read_temp);
+
 #ifdef __cplusplus
 }
 #endif

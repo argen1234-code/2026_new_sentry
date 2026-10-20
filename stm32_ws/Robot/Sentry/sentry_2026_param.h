@@ -109,11 +109,21 @@ extern "C" {
 #define ROBOT_CHASSIS_CONTROL_FREQ                500.0F                             /**< 底盘控制频率，单位 Hz。 */
 #define ROBOT_CHASSIS_MAX_CURRENT                 16000.0F                           /**< DJI 电流输出限幅。 */
 #define ROBOT_CHASSIS_RPM_TO_VECTOR               0.000415809748903494517209F        /**< M3508 rpm 到线速度换算。 */
-#define ROBOT_CHASSIS_MAX_WHEEL_SPEED             4.0F                               /**< 最大轮速。 */
+#define ROBOT_CHASSIS_MAX_WHEEL_SPEED             4.0F                               /**< 旧 DJI 路径最大轮速。 */
+#define ROBOT_CHASSIS_WHEEL_RADIUS_M               0.045F                             /**< 麦轮半径，单位 m。 */
+#define ROBOT_CHASSIS_DM_GEAR_RATIO                1.0F                               /**< DM6215 直驱减速比。 */
+#define ROBOT_CHASSIS_DM_MAX_RAD_S                 40.0F                              /**< DM 速度模式最大转速。 */
+#define ROBOT_CHASSIS_DM_MAX_WHEEL_SPEED           (ROBOT_CHASSIS_DM_MAX_RAD_S * ROBOT_CHASSIS_WHEEL_RADIUS_M * ROBOT_CHASSIS_DM_GEAR_RATIO) /**< DM 路径最大轮速，m/s。 */
+#define ROBOT_CHASSIS_DM_FB_LOST_MS                200U                               /**< DM 反馈离线判定，单位 ms；约 12 个反馈周期。 */
+#define ROBOT_CHASSIS_DM_ENABLE_PERIOD_MS          500U                               /**< DM 运行中重发使能周期，单位 ms；与 6c5c78b 基线一致。 */
+#define ROBOT_CHASSIS_DM_DISABLE_AFTER_MS          1000U                              /**< 持续故障 1 s 后失能，单位 ms。 */
+#define ROBOT_CHASSIS_DM_STOP_PERIOD_MS            100U                               /**< 故障锁存后重发停止周期，单位 ms。 */
 #define ROBOT_CHASSIS_MAX_SPEED_X                 2.5F                               /**< 普通模式最大 vx。 */
 #define ROBOT_CHASSIS_MAX_SPEED_Y                 2.5F                               /**< 普通模式最大 vy。 */
-#define ROBOT_CHASSIS_WZ_SET_SCALE                0.1F                               /**< wz 目标缩放。 */
-#define ROBOT_CHASSIS_CENTER_DIST                 0.22F                              /**< 普通轮底盘轮到中心距离，单位 m。 */
+#define ROBOT_CHASSIS_WZ_SET_SCALE                1.0F                               /**< wz 分解整定系数。 */
+#define ROBOT_CHASSIS_CENTER_DIST                 0.3077F                            /**< 麦轮 L/2 + W/2，来自 URDF 轮位置。 */
+#define ROBOT_CHASSIS_HALF_LENGTH_M               0.1716F                            /**< URDF 半轴距。 */
+#define ROBOT_CHASSIS_HALF_WIDTH_M                0.1362F                            /**< URDF 平均半轮距。 */
 #define ROBOT_CHASSIS_HALF_LENGTH                 0.20F                              /**< 舵轮底盘半车长，单位 m。 */
 #define ROBOT_CHASSIS_HALF_WIDTH                  0.175F                             /**< 舵轮底盘半车宽，单位 m。 */
 #define ROBOT_CHASSIS_SWING_NO_MOVE_ANGLE         0.7F                               /**< 静止摆动角度。 */

@@ -53,12 +53,16 @@ if(ROBOT_TARGET STREQUAL "sentry_2026")
     set(ROBOT_TARGET_DEF "ROBOT_TARGET_SENTRY_2026")
 elseif(ROBOT_TARGET STREQUAL "sentry_2026_bringup")
     set(ROBOT_TARGET_DEF "ROBOT_TARGET_SENTRY_2026_BRINGUP")
+elseif(ROBOT_TARGET STREQUAL "sentry_2026_chassis")
+    set(ROBOT_TARGET_DEF "ROBOT_TARGET_SENTRY_2026_CHASSIS")
 elseif(ROBOT_TARGET STREQUAL "infantry_steer_2025")
     set(ROBOT_TARGET_DEF "ROBOT_TARGET_INFANTRY_STEER_2025")
 elseif(ROBOT_TARGET STREQUAL "board_only_dm02")
     set(ROBOT_TARGET_DEF "ROBOT_TARGET_BOARD_ONLY_DM02")
 elseif(ROBOT_TARGET STREQUAL "can1_dmh6215_test")
     set(ROBOT_TARGET_DEF "ROBOT_TARGET_CAN1_DMH6215_TEST")
+elseif(ROBOT_TARGET STREQUAL "can1_dmh6215_angle_test")
+    set(ROBOT_TARGET_DEF "ROBOT_TARGET_CAN1_DMH6215_ANGLE_TEST")
 else()
     message(FATAL_ERROR
         "Unknown ROBOT_TARGET '${ROBOT_TARGET}'. "
@@ -120,6 +124,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     ../Apps/app_board_test.c
     ../Apps/app_communication.c
     ../Apps/app_can_test.c
+    ../Apps/app_angle_test.c
     ../Apps/app_board_link.c
     ../Apps/app_calibration.c
     ../Apps/app_observe.c
@@ -137,6 +142,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     ../Algorithm/Src/pid_core.c
     ../Algorithm/Src/pid_linear.c
     ../Algorithm/Src/pid_angle.c
+    ../Algorithm/Src/angle_pid.c
     ../Algorithm/Src/pid.c
     ../Algorithm/Src/kalman.c
     ../Algorithm/Src/extended_kalman.c

@@ -46,29 +46,27 @@ Boards          CubeMX / HAL / Keil 生成工程与板级启动文件
 ## 4. ROS 侧分层
 
 ```text
-sentry_bringup        launch / 系统组合 / 参数装载
+sentry_bringup          launch / 系统组合 / 参数装载
       |
-sentry_decision       行为状态机、战术决策、模式切换
+sentry_decision         行为状态机、战术决策、模式切换
       |
-sentry_perception    视觉检测、自瞄、目标跟踪
-sentry_localization  SLAM、定位、坐标变换
-sentry_navigation    全局/局部规划、代价地图
-sentry_control       云台/底盘/发射指令生成与插值
+sentry_perception       点云地形分析、点云转激光、扫描生成
+sentry_localization     Point-LIO、重定位、坐标变换
+sentry_navigation       Nav2 插件、控制器、行为树、代价地图
       |
-sentry_devices       串口桥、相机/LiDAR 接入、时间同步
+sentry_hardware         雷达、串口桥、USB 桥、底盘 UDP 指令
       |
-sentry_msgs          msg / srv / action 接口定义
-sentry_algorithm     纯算法（弹道、滤波、几何），不依赖 ROS 运行时
+sentry_interfaces       msg / srv / action 接口定义
 ```
 
-`sentry_robot` 存放每台车的 YAML 参数；`sentry_description` 存放 URDF/xacro/mesh；`sentry_tools` 存放调试与可视化工具。
+`sentry_description` 存放 URDF/xacro/mesh；`ros_ws/config/` 存放通用导航参数、单车参数和场地地图。
 
 ### 依赖规则
 
-- `sentry_algorithm` 不依赖 `rclcpp`，可被单元测试直接调用。
-- `sentry_msgs` 不依赖其它业务包。
+- `sentry_interfaces` 不依赖其它业务包。
 - 业务包之间通过 topic/service/action 交互，不直接链接彼此的内部实现。
-- 具体车辆参数只能从 `sentry_robot/config/<target>.yaml` 注入。
+- 具体车辆参数从 `ros_ws/config/robots/*.yaml` 注入。
+- Jetson ↔ STM32 的第一条实车链路是 `sentry_hardware/usb_bridge` 的 USB CDC 桥。
 
 ## 5. 跨端数据流
 
@@ -78,19 +76,19 @@ sentry_algorithm     纯算法（弹道、滤波、几何），不依赖 ROS 运
 Imu / Referee / Motor
   -> app_observe / app_referee
   -> communication_host
-  -> UART/USB
-  -> sentry_devices/serial_bridge
-  -> sentry_msgs/RobotState
-  -> localization / decision / control
+  -> USB CDC
+  -> sentry_hardware/usb_bridge
+  -> sentry_interfaces 状态消息
+  -> localization / decision / navigation
 ```
 
 ### 下行（Jetson → STM32）
 
 ```text
-sentry_decision / sentry_control
-  -> sentry_msgs/GimbalCmd / ChassisCmd / ShootCmd
-  -> sentry_devices/serial_bridge
-  -> UART/USB
+sentry_decision / sentry_navigation
+  -> sentry_interfaces 指令消息
+  -> sentry_hardware/usb_bridge
+  -> USB CDC
   -> communication_board
   -> Components/Input + Controller
   -> Devices/Motor
@@ -112,8 +110,9 @@ Robot/robot.h                              只负责选择当前 ROBOT_TARGET
 ROS 侧：
 
 ```text
-sentry_robot/config/<role_chassis_year>.yaml
-sentry_bringup/launch/<role_chassis_year>.launch.py
+ros_ws/config/robots/<role_chassis_year>.yaml
+ros_ws/config/common/*.yaml
+ros_ws/src/sentry_bringup/launch/sentry.launch.py
 ```
 
 新增车辆时复制一组文件并完整写清楚事实，不做隐式继承或模糊分类。

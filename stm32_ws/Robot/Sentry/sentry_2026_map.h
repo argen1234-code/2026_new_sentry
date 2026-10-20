@@ -78,7 +78,7 @@ extern "C" {
 #define ROBOT_WS2812_LED_MAX                      ((uint16_t)1U)                     /**< WS2812 最大灯珠数量。 */
 #define ROBOT_WS2812_RESET_WORDS                  ((uint16_t)64U)                    /**< WS2812 复位码长度。 */
 #define ROBOT_WS2812_TX_TIMEOUT_MS                20U                                /**< WS2812 发送超时，单位 ms。 */
-#define ROBOT_IMU_SPI_TIMEOUT_MS                  10U                                /**< BMI088 SPI 阻塞超时，单位 ms。 */
+#define ROBOT_IMU_SPI_TIMEOUT_MS                  1U                                 /**< BMI088 SPI 阻塞超时，单位 ms。 */
 #define ROBOT_FLASH_DEVICE_BASE                   0x000000UL                         /**< 外部 Flash 器件内部起点。 */
 #define ROBOT_FLASH_DEVICE_SIZE                   (8UL * 1024UL * 1024UL)            /**< 外部 Flash 总容量，单位 byte。 */
 #define ROBOT_FLASH_DEVICE_PAGE_SIZE              256U                               /**< 外部 Flash 页大小，单位 byte。 */
@@ -143,6 +143,21 @@ extern "C" {
 #define ROBOT_TARGET_MOTOR_CHASSIS_DRIVE_1_ID     0x202U                             /**< 底盘驱动 1 反馈 ID。 */
 #define ROBOT_TARGET_MOTOR_CHASSIS_DRIVE_2_ID     0x203U                             /**< 底盘驱动 2 反馈 ID。 */
 #define ROBOT_TARGET_MOTOR_CHASSIS_DRIVE_3_ID     0x204U                             /**< 底盘驱动 3 反馈 ID。 */
+
+/*
+ * DMH6215 原生速度模式映射。速度命令 ID = 基础 ID + 0x200；
+ * 反馈 ID 保持 0x51..0x54。摩擦轮暂未接入，后续接入前必须迁移 ESC_ID
+ * 或把摩擦轮移到独立 FDCAN，避免 0x201/0x202 冲突。
+ */
+#define ROBOT_TARGET_MOTOR_CHASSIS_DM_BIND        1U                                 /**< 启用 DM6215 反馈量程绑定。 */
+#define ROBOT_TARGET_MOTOR_CHASSIS_DM_ID_0        1U                                 /**< RR 基础 ID。 */
+#define ROBOT_TARGET_MOTOR_CHASSIS_DM_ID_1        2U                                 /**< FL 基础 ID。 */
+#define ROBOT_TARGET_MOTOR_CHASSIS_DM_ID_2        3U                                 /**< RL 基础 ID。 */
+#define ROBOT_TARGET_MOTOR_CHASSIS_DM_ID_3        4U                                 /**< FR 基础 ID。 */
+#define ROBOT_TARGET_MOTOR_CHASSIS_DM_FB_ID_0     0x51U                              /**< RR 反馈 ID。 */
+#define ROBOT_TARGET_MOTOR_CHASSIS_DM_FB_ID_1     0x52U                              /**< FL 反馈 ID。 */
+#define ROBOT_TARGET_MOTOR_CHASSIS_DM_FB_ID_2     0x53U                              /**< RL 反馈 ID。 */
+#define ROBOT_TARGET_MOTOR_CHASSIS_DM_FB_ID_3     0x54U                              /**< FR 反馈 ID。 */
 #define ROBOT_TARGET_MOTOR_CHASSIS_STEER_0_ID     0x205U                             /**< 底盘舵向 0 反馈 ID。 */
 #define ROBOT_TARGET_MOTOR_CHASSIS_STEER_1_ID     0x206U                             /**< 底盘舵向 1 反馈 ID。 */
 #define ROBOT_TARGET_MOTOR_CHASSIS_STEER_2_ID     0x207U                             /**< 底盘舵向 2 反馈 ID。 */

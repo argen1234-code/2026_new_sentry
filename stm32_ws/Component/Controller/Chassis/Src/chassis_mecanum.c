@@ -304,13 +304,22 @@ static float32_t chassis_mecanum_yaw(ChassisMecanumCtx *ctx, const ChassisInput 
  */
 static void chassis_mecanum_kin(const ChassisCfg *cfg, float32_t vx, float32_t vy, float32_t wz, float32_t wheel_speed[4])
 {
-    float32_t center = cfg->mecanum_center;
-    float32_t scale = cfg->wz_scale;
+    /*
+     * 与 2026_robot_base 的麦轮分解结构一致：
+     *   FL =  Vx + Vy + Wz
+     *   FR =  Vx - Vy - Wz
+     *   RL =  Vx - Vy + Wz
+     *   RR =  Vx + Vy - Wz
+     * 本工程轮序为 [RR, FL, RL, FR]，且实测前进符号为
+     * [-1, +1, +1, -1]，因此对参考行乘对应符号。
+     * center = L/2 + W/2，来自 URDF 轮位置；wz_scale 保留为整定系数。
+     */
+    float32_t center = cfg->mecanum_center * cfg->wz_scale;
 
-    wheel_speed[0] = -vx - vy + (scale - 1.0F) * center * wz;
-    wheel_speed[1] = vx - vy + (scale - 1.0F) * center * wz;
-    wheel_speed[2] = vx + vy + (-scale - 1.0F) * center * wz;
-    wheel_speed[3] = -vx + vy + (-scale - 1.0F) * center * wz;
+    wheel_speed[0] = -vx - vy + center * wz; /* RR */
+    wheel_speed[1] = vx + vy + center * wz;  /* FL */
+    wheel_speed[2] = vx - vy + center * wz;  /* RL */
+    wheel_speed[3] = -vx + vy + center * wz; /* FR */
 }
 
 /**
@@ -441,6 +450,11 @@ ChassisStatus chassis_mecanum_control(Chassis *chassis, void *impl, const Chassi
     ctx->mode = input->cmd.mode;
 
     if (input->cmd.mode == ChassisModeRaw) {
+        if (cfg->drive_mode == ChassisDriveModeSpeed) {
+            /* 速度模式下 raw 电流没有语义，按停止处理。 */
+            chassis_mecanum_zero(ctx);
+            return ChassisOk;
+        }
         for (i = 0U; i < CHASSIS_MECANUM_WHEEL_NUM; i++) {
             float32_t current = (float32_t)input->cmd.raw_drive_current[i] * (float32_t)cfg->drive_polarity[i];
             current_raw[i] = chassis_mecanum_clamp(current, cfg->max_drive_current);
@@ -453,13 +467,33 @@ ChassisStatus chassis_mecanum_control(Chassis *chassis, void *impl, const Chassi
         return ChassisOk;
     }
 
-    if (chassis_mecanum_online(ctx) == 0U) {
+    if (cfg->drive_mode == ChassisDriveModeSpeed) {
+        uint32_t online = 0U;
+        for (i = 0U; i < CHASSIS_MECANUM_WHEEL_NUM; i++) {
+            if (ctx->wheel[i].online != 0U) {
+                online++;
+            }
+        }
+        if (online < (uint32_t)cfg->min_online_motors) {
+            chassis_mecanum_zero(ctx);
+            return ChassisState;
+        }
+    } else if (chassis_mecanum_online(ctx) == 0U) {
         chassis_mecanum_zero(ctx);
         return ChassisState;
     }
 
     chassis_mecanum_kin(cfg, input->cmd.vx, input->cmd.vy, input->cmd.wz + chassis_mecanum_yaw(ctx, input), wheel_speed);
     chassis_mecanum_limit_speed(cfg, wheel_speed);
+
+    if (cfg->drive_mode == ChassisDriveModeSpeed) {
+        for (i = 0U; i < CHASSIS_MECANUM_WHEEL_NUM; i++) {
+            ctx->wheel[i].speed_set = wheel_speed[i] * (float32_t)cfg->drive_polarity[i];
+            ctx->wheel[i].current = 0;
+            ctx->current[i] = 0;
+        }
+        return ChassisOk;
+    }
 
     for (i = 0U; i < CHASSIS_MECANUM_WHEEL_NUM; i++) {
         float32_t current;

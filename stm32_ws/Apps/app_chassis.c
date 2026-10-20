@@ -20,10 +20,14 @@
 #include "app_gimbal.h"
 #include "app_input.h"
 #include "app_observe.h"
+#if ROBOT_APP_ENABLE_CALIBRATION != 0U
+#include "app_calibration.h"
+#endif
 #include "bsp_timebase.h"
 #include "debug.h"
 #include "main.h"
 #include "cmsis_os.h"
+#include "cmsis_os2.h"
 
 #if CHASSIS_TYPE == CHASSIS_TYPE_MECANUM
 #include "chassis_mecanum.h"
@@ -96,6 +100,75 @@ static AppChassisDiag app_chassis_diag;
 /** @brief 最近一次功率注入缓存。 */
 static AppChassisPower app_chassis_power;
 
+/** @brief 任务心跳时间戳，单位 ms。 */
+static volatile uint32_t app_chassis_heartbeat_ms;
+
+/** @brief 任务周期 overrun 计数。 */
+static volatile uint32_t app_chassis_overrun_count;
+
+/** @brief 外部急停标志。 */
+static volatile uint8_t app_chassis_emergency;
+
+#if defined(APP_CHASSIS_BENCH_TEST) && (APP_CHASSIS_BENCH_TEST != 0U)
+/** @brief 台架注入起始时间，单位 ms。 */
+static uint32_t app_chassis_bench_start_ms;
+#endif
+
+#if defined(ROBOT_CHASSIS_DRIVE_MODE_DM_SPEED)
+/** @brief DM 速度模式是否已完成启动序列。 */
+static uint8_t app_chassis_dm_ready;
+
+/** @brief DM 故障计时起点，单位 ms。 */
+static uint32_t app_chassis_dm_fault_since_ms;
+
+/** @brief DM 故障锁存后最近一次停止帧时间，单位 ms。 */
+static uint32_t app_chassis_dm_last_stop_ms;
+
+/** @brief DM 故障锁存标志。 */
+static uint8_t app_chassis_dm_fault_latched;
+
+/** @brief DM 启动完成时间，用于故障锁存宽限，单位 ms。 */
+static uint32_t app_chassis_dm_start_ms;
+
+/** @brief DM 故障锁存次数。 */
+static uint32_t app_chassis_dm_fault_count;
+
+/** @brief DM 速度帧发送失败次数。 */
+static uint32_t app_chassis_dm_tx_drop_count;
+
+/** @brief 最近一次重发使能的时间，单位 ms（HAL tick）。 */
+static uint32_t app_chassis_dm_last_enable_ms;
+
+/** @brief 使能帧发送成功次数。 */
+static uint32_t app_chassis_dm_enable_count;
+
+/** @brief 使能帧发送失败次数。 */
+static uint32_t app_chassis_dm_enable_fail_count;
+
+/** @brief 每个驱动轮运行期间反馈速度最小值，m/s。 */
+static float32_t app_chassis_dm_fb_min[CHASSIS_DRIVE_MAX];
+
+/** @brief 每个驱动轮运行期间反馈速度最大值，m/s。 */
+static float32_t app_chassis_dm_fb_max[CHASSIS_DRIVE_MAX];
+
+/** @brief 每个驱动轮是否已经记录过反馈极值。 */
+static uint8_t app_chassis_dm_fb_seen[CHASSIS_DRIVE_MAX];
+
+/** @brief CTRL_MODE 写入并读回成功的电机数量。 */
+static uint32_t app_chassis_dm_mode_ok_count;
+
+/** @brief CTRL_MODE 写入或读回失败的电机数量。 */
+static uint32_t app_chassis_dm_mode_fail_count;
+
+/** @brief 每个驱动轮读回的 CTRL_MODE，0xFFFFFFFF 表示未读到。 */
+static uint32_t app_chassis_dm_mode_value[CHASSIS_DRIVE_MAX];
+
+static void app_chassis_dm_start(void);
+static void app_chassis_dm_set_speed_mode(void);
+static void app_chassis_dm_enable_all(uint32_t now_ms);
+static void app_chassis_dm_force_stop(uint32_t now_ms);
+#endif
+
 #if CHASSIS_TYPE == CHASSIS_TYPE_MECANUM
 /** @brief 麦克纳姆轮底盘私有上下文。 */
 static ChassisMecanumCtx app_chassis_impl;
@@ -112,10 +185,17 @@ static ChassisBalanceCtx app_chassis_impl;
 
 /** @brief 底盘驱动电机反馈 ID 表。 */
 static const uint16_t app_chassis_drive_id[CHASSIS_DRIVE_MAX] = {
+#if defined(ROBOT_CHASSIS_DRIVE_MODE_DM_SPEED)
+    ROBOT_TARGET_MOTOR_CHASSIS_DM_FB_ID_0,
+    ROBOT_TARGET_MOTOR_CHASSIS_DM_FB_ID_1,
+    ROBOT_TARGET_MOTOR_CHASSIS_DM_FB_ID_2,
+    ROBOT_TARGET_MOTOR_CHASSIS_DM_FB_ID_3,
+#else
     MOTOR_CHASSIS_DRIVE_0_ID,
     MOTOR_CHASSIS_DRIVE_1_ID,
     MOTOR_CHASSIS_DRIVE_2_ID,
     MOTOR_CHASSIS_DRIVE_3_ID,
+#endif
 };
 
 /** @brief 底盘舵向电机反馈 ID 表。 */
@@ -204,6 +284,16 @@ static void app_chassis_make_cfg(ChassisCfg *cfg)
 
     (void)memset(cfg, 0, sizeof(*cfg));
     cfg->type = (ChassisType)CHASSIS_TYPE;
+#if defined(ROBOT_CHASSIS_DRIVE_MODE_DM_SPEED)
+    cfg->drive_mode = ChassisDriveModeSpeed;
+#else
+    cfg->drive_mode = ChassisDriveModeCurrent;
+#endif
+#if defined(ROBOT_CHASSIS_MIN_ONLINE_MOTORS)
+    cfg->min_online_motors = (uint8_t)ROBOT_CHASSIS_MIN_ONLINE_MOTORS;
+#else
+    cfg->min_online_motors = (uint8_t)CHASSIS_DRIVE_MAX;
+#endif
     app_chassis_pid(&cfg->drive_pid,
                     ROBOT_CHASSIS_DRIVE_PID_KP,
                     ROBOT_CHASSIS_DRIVE_PID_KI,
@@ -228,10 +318,15 @@ static void app_chassis_make_cfg(ChassisCfg *cfg)
                     ROBOT_CHASSIS_FOLLOW_PID_KD,
                     ROBOT_CHASSIS_FOLLOW_PID_MAX_OUT,
                     ROBOT_CHASSIS_FOLLOW_PID_MAX_IOUT);
+#if defined(ROBOT_CHASSIS_DRIVE_MODE_DM_SPEED)
+    cfg->drive_rpm_to_speed = 0.0F;
+    cfg->max_drive_speed = ROBOT_CHASSIS_DM_MAX_WHEEL_SPEED;
+#else
     cfg->drive_rpm_to_speed = ROBOT_CHASSIS_RPM_TO_VECTOR;
+    cfg->max_drive_speed = ROBOT_CHASSIS_MAX_WHEEL_SPEED;
+#endif
     cfg->steer_rpm_to_speed = 1.0F;
     cfg->steer_ecd_to_rad = 1.0F / ROBOT_CHASSIS_STEER_ANGLE_RATIO;
-    cfg->max_drive_speed = ROBOT_CHASSIS_MAX_WHEEL_SPEED;
     cfg->max_drive_current = ROBOT_CHASSIS_MAX_CURRENT;
     cfg->max_steer_current = ROBOT_CHASSIS_STEER_CURRENT_MAX;
     cfg->power_limit = ROBOT_CHASSIS_POWER_LIMIT;
@@ -278,6 +373,8 @@ static void app_chassis_make_cfg(ChassisCfg *cfg)
  */
 static uint8_t app_chassis_motor_recent(const DjiMotorFb *fb, uint32_t now_ms)
 {
+    uint32_t now_tick;
+
     if (fb == NULL) {
         return 0U;
     }
@@ -286,7 +383,10 @@ static uint8_t app_chassis_motor_recent(const DjiMotorFb *fb, uint32_t now_ms)
     (void)now_ms;
     return 1U;
 #else
-    return (((uint32_t)(now_ms - fb->last_time)) <= APP_CHASSIS_MOTOR_LOST_MS) ? 1U : 0U;
+    /* motor.c 的反馈时间戳来自 HAL_GetTick()，年龄判断必须使用同一时间源。 */
+    (void)now_ms;
+    now_tick = HAL_GetTick();
+    return (((uint32_t)(now_tick - fb->last_time)) <= APP_CHASSIS_MOTOR_LOST_MS) ? 1U : 0U;
 #endif
 }
 
@@ -343,12 +443,35 @@ static motor_status_t app_chassis_drive_fb(uint32_t now_ms, uint32_t index, Chas
         return MotorArg;
     }
 
+#if defined(ROBOT_CHASSIS_DRIVE_MODE_DM_SPEED)
+    {
+        motor_mit_fb_t fb;
+
+        (void)memset(out, 0, sizeof(*out));
+        status = motor_mit_get(MOTOR_CHASSIS_BUS, app_chassis_drive_id[index], &fb);
+        if (status != MotorOk) {
+            return status;
+        }
+        if ((uint32_t)(HAL_GetTick() - fb.last_time) > ROBOT_CHASSIS_DM_FB_LOST_MS) {
+            return MotorNoData;
+        }
+        (void)now_ms;
+
+        /* DM 反馈是电机正方向下的 rad/s，换算成底盘 m/s；符号已包含在运动学里。 */
+        out->speed = fb.fb.vel * ROBOT_CHASSIS_WHEEL_RADIUS_M * ROBOT_CHASSIS_DM_GEAR_RATIO;
+        out->speed_rpm = 0;
+        out->current = 0;
+        out->online = 1U;
+        return MotorOk;
+    }
+#else
     status = app_chassis_motor_fb(MOTOR_CHASSIS_BUS, app_chassis_drive_id[index], now_ms, out);
     if ((status == MotorOk) && (ROBOT_CHASSIS_MPS_TO_RPM > 0.0F)) {
         out->speed = (float32_t)out->speed_rpm / ROBOT_CHASSIS_MPS_TO_RPM;
     }
 
     return status;
+#endif
 }
 
 /**
@@ -395,9 +518,33 @@ static void app_chassis_fill_cmd(ChassisInput *input)
     if (app_input_get_chassis_cmd(&input->cmd) == 0U) {
         (void)memset(&input->cmd, 0, sizeof(input->cmd));
     }
+#if APP_CHASSIS_REQUIRE_GIMBAL_READY != 0U
     if (app_gimbal_ready() == 0U) {
         input->cmd.force_stop = 1U;
     }
+#endif
+    if (app_chassis_emergency != 0U) {
+        input->cmd.force_stop = 1U;
+    }
+#if ROBOT_APP_ENABLE_CALIBRATION != 0U
+    if (app_calibration_is_busy() != 0U) {
+        input->cmd.force_stop = 1U;
+    }
+#endif
+#if defined(APP_CHASSIS_BENCH_TEST) && (APP_CHASSIS_BENCH_TEST != 0U)
+    if (app_chassis_bench_start_ms == 0U) {
+        app_chassis_bench_start_ms = HAL_GetTick();
+    }
+    if ((uint32_t)(HAL_GetTick() - app_chassis_bench_start_ms) < APP_CHASSIS_BENCH_MS) {
+        input->cmd.online = 1U;
+        input->cmd.mode = ChassisModeNoFollow;
+        input->cmd.vx = APP_CHASSIS_BENCH_VX_MPS;
+        input->cmd.vy = 0.0F;
+        input->cmd.wz = 0.0F;
+    } else {
+        input->cmd.force_stop = 1U;
+    }
+#endif
 }
 
 /**
@@ -542,6 +689,30 @@ static uint8_t app_chassis_drive_mask(const ChassisInput *input)
 }
 
 /**
+ * @brief 统计驱动轮反馈在线数量。
+ *
+ * @param input 周期输入。
+ * @return 在线轮数。
+ */
+static uint8_t app_chassis_drive_count(const ChassisInput *input)
+{
+    uint8_t count = 0U;
+    uint32_t i;
+
+    if (input == NULL) {
+        return 0U;
+    }
+
+    for (i = 0U; i < CHASSIS_DRIVE_MAX; i++) {
+        if (input->drive_fb[i].online != 0U) {
+            count++;
+        }
+    }
+
+    return count;
+}
+
+/**
  * @brief 生成舵向反馈在线 bit mask。
  *
  * @param input 周期输入。
@@ -585,6 +756,48 @@ static void app_chassis_send(const ChassisOutput *output,
                              motor_status_t *steer_send,
                              uint8_t *zero_out)
 {
+#if defined(ROBOT_CHASSIS_DRIVE_MODE_DM_SPEED)
+    const float32_t rad_per_mps =
+        1.0F / (ROBOT_CHASSIS_WHEEL_RADIUS_M * ROBOT_CHASSIS_DM_GEAR_RATIO);
+    motor_status_t result = MotorOk;
+    uint8_t send_ok;
+    uint32_t i;
+
+    send_ok = ((output != NULL) &&
+               (status == ChassisOk) &&
+               (output->send_enable != 0U)) ? 1U : 0U;
+    if (zero_out != NULL) {
+        *zero_out = (send_ok != 0U) ? 0U : 1U;
+    }
+
+    for (i = 0U; i < CHASSIS_DRIVE_MAX; i++) {
+        float32_t vel = 0.0F;
+        motor_status_t status_i;
+
+        if (send_ok != 0U) {
+            vel = output->drive_speed_set[i] * rad_per_mps;
+            if (vel > ROBOT_CHASSIS_DM_MAX_RAD_S) {
+                vel = ROBOT_CHASSIS_DM_MAX_RAD_S;
+            } else if (vel < -ROBOT_CHASSIS_DM_MAX_RAD_S) {
+                vel = -ROBOT_CHASSIS_DM_MAX_RAD_S;
+            }
+        }
+
+        status_i = motor_dm_speed(MOTOR_CHASSIS_BUS,
+                                  (uint16_t)(ROBOT_TARGET_MOTOR_CHASSIS_DM_ID_0 + i),
+                                  vel);
+        if (status_i != MotorOk) {
+            result = status_i;
+        }
+    }
+
+    if (drive_send != NULL) {
+        *drive_send = result;
+    }
+    if (steer_send != NULL) {
+        *steer_send = MotorOk;
+    }
+#else
     int16_t drive[4] = {0, 0, 0, 0};
     int16_t steer[4] = {0, 0, 0, 0};
 
@@ -623,6 +836,7 @@ static void app_chassis_send(const ChassisOutput *output,
     if (steer_send != NULL) {
         *steer_send = MotorOk;
     }
+#endif
 #endif
 }
 
@@ -699,13 +913,32 @@ static void app_chassis_commit(const ChassisInput *input,
     if (zero_out != 0U) {
         app_chassis_diag.zero_count++;
     }
+    app_chassis_diag.cycle_overrun_count = app_chassis_overrun_count;
     app_chassis_diag.last_tick_ms = input->tick_ms;
     app_chassis_diag.last_time_us = (uint32_t)now_us;
     app_chassis_diag.chassis_status = chassis_status;
     for (i = 0U; i < CHASSIS_DRIVE_MAX; i++) {
         app_chassis_diag.drive_status[i] = drive_status[i];
         app_chassis_diag.drive_current[i] = output->drive_current[i];
+        app_chassis_diag.drive_speed_cmd[i] = output->drive_speed_set[i];
+        app_chassis_diag.drive_speed_fb[i] = input->drive_fb[i].speed;
     }
+#if defined(ROBOT_CHASSIS_DRIVE_MODE_DM_SPEED)
+    app_chassis_diag.dm_fault_latched = app_chassis_dm_fault_latched;
+    app_chassis_diag.dm_fault_count = app_chassis_dm_fault_count;
+    app_chassis_diag.dm_tx_drop_count = app_chassis_dm_tx_drop_count;
+    app_chassis_diag.dm_enable_count = app_chassis_dm_enable_count;
+    app_chassis_diag.dm_enable_fail_count = app_chassis_dm_enable_fail_count;
+    app_chassis_diag.dm_mode_ok_count = app_chassis_dm_mode_ok_count;
+    app_chassis_diag.dm_mode_fail_count = app_chassis_dm_mode_fail_count;
+    for (i = 0U; i < CHASSIS_DRIVE_MAX; i++) {
+        app_chassis_diag.dm_mode_value[i] = app_chassis_dm_mode_value[i];
+    }
+    for (i = 0U; i < CHASSIS_DRIVE_MAX; i++) {
+        app_chassis_diag.drive_speed_fb_min[i] = app_chassis_dm_fb_min[i];
+        app_chassis_diag.drive_speed_fb_max[i] = app_chassis_dm_fb_max[i];
+    }
+#endif
     for (i = 0U; i < CHASSIS_STEER_MAX; i++) {
         app_chassis_diag.steer_status[i] = steer_status[i];
         app_chassis_diag.steer_current[i] = output->steer_current[i];
@@ -737,6 +970,180 @@ static void app_chassis_commit(const ChassisInput *input,
  *
  * @param argument CMSIS-RTOS2 输入参数。
  */
+#if defined(ROBOT_CHASSIS_DRIVE_MODE_DM_SPEED)
+/**
+ * @brief 将四个驱动轮切换到达妙原生速度模式并读回确认。
+ *
+ * 6c5c78b 基线在跑速度前会写 CTRL_MODE=3（0x55 / RID 0x0A）、读回确认，
+ * 再保存参数。缺少这一步时，模式不是 3 的电机仍会发反馈，但会忽略
+ * ID+0x200 的使能和速度帧，表现为“在线但不动”。
+ */
+static void app_chassis_dm_set_speed_mode(void)
+{
+    uint32_t i;
+    uint32_t round;
+    uint32_t ok_count = 0U;
+
+    app_chassis_dm_mode_ok_count = 0U;
+    app_chassis_dm_mode_fail_count = 0U;
+
+    for (i = 0U; i < CHASSIS_DRIVE_MAX; i++) {
+        uint16_t id = (uint16_t)(ROBOT_TARGET_MOTOR_CHASSIS_DM_ID_0 + i);
+        uint32_t seq;
+        uint32_t value = 0xFFFFFFFFU;
+
+        app_chassis_dm_mode_value[i] = 0xFFFFFFFFU;
+
+        /* 与基线一致：先写，再读回确认，避免写帧丢失后误以为已切模式。 */
+        (void)motor_dm_param_cmd(MOTOR_CHASSIS_BUS, id, 0x55U, 0x0AU, 3U);
+        osDelay(50U);
+
+        seq = motor_dm_param_seq();
+        (void)motor_dm_param_cmd(MOTOR_CHASSIS_BUS, id, 0x33U, 0x0AU, 0U);
+
+        for (round = 0U; round < 40U; round++) {
+            osDelay(5U);
+            if ((motor_dm_param_seq() != seq) &&
+                (motor_dm_param_get(id, 0x0AU, &value) != 0U)) {
+                app_chassis_dm_mode_value[i] = value;
+                break;
+            }
+        }
+
+        if (app_chassis_dm_mode_value[i] == 3U) {
+            ok_count++;
+        }
+    }
+
+    app_chassis_dm_mode_ok_count = ok_count;
+    app_chassis_dm_mode_fail_count = (uint32_t)CHASSIS_DRIVE_MAX - ok_count;
+
+    if (ok_count == (uint32_t)CHASSIS_DRIVE_MAX) {
+        for (i = 0U; i < CHASSIS_DRIVE_MAX; i++) {
+            (void)motor_dm_param_cmd(MOTOR_CHASSIS_BUS,
+                                     (uint16_t)(ROBOT_TARGET_MOTOR_CHASSIS_DM_ID_0 + i),
+                                     0xAAU, 0x01U, 0U);
+        }
+        osDelay(100U);
+    }
+}
+
+/**
+ * @brief 向四个驱动轮重发一次使能帧。
+ *
+ * 达妙速度模式在漏收使能或通讯中断后会保持失能；基线 6c5c78b 在运行中
+ * 每 500 ms 重发一次使能，这里保持同样的行为，避免单帧丢失导致某一轮不转。
+ *
+ * @param now_ms 当前 HAL tick，单位 ms。
+ */
+static void app_chassis_dm_enable_all(uint32_t now_ms)
+{
+    uint32_t i;
+
+    app_chassis_dm_last_enable_ms = now_ms;
+    for (i = 0U; i < CHASSIS_DRIVE_MAX; i++) {
+        if (motor_dm_speed_cmd(MOTOR_CHASSIS_BUS,
+                               (uint16_t)(ROBOT_TARGET_MOTOR_CHASSIS_DM_ID_0 + i),
+                               DmMotorEnable) == MotorOk) {
+            app_chassis_dm_enable_count++;
+        } else {
+            app_chassis_dm_enable_fail_count++;
+        }
+    }
+}
+
+static void app_chassis_dm_start(void)
+{
+    motor_mit_fb_t fb;
+    uint32_t i;
+    uint32_t round;
+    uint32_t online;
+    uint8_t ready;
+
+    app_chassis_dm_ready = 0U;
+    app_chassis_dm_fault_latched = 0U;
+    app_chassis_dm_fault_since_ms = 0U;
+    app_chassis_dm_last_stop_ms = 0U;
+    app_chassis_dm_last_enable_ms = 0U;
+    app_chassis_dm_enable_count = 0U;
+    app_chassis_dm_enable_fail_count = 0U;
+    for (i = 0U; i < CHASSIS_DRIVE_MAX; i++) {
+        app_chassis_dm_fb_min[i] = 0.0F;
+        app_chassis_dm_fb_max[i] = 0.0F;
+        app_chassis_dm_fb_seen[i] = 0U;
+    }
+
+    for (round = 0U; round < 5U; round++) {
+        for (i = 0U; i < CHASSIS_DRIVE_MAX; i++) {
+            (void)motor_dm_speed_stop(MOTOR_CHASSIS_BUS,
+                                      (uint16_t)(ROBOT_TARGET_MOTOR_CHASSIS_DM_ID_0 + i));
+        }
+        osDelay(20U);
+    }
+    osDelay(200U);
+
+    /* 先确认四轮都在原生速度模式，再使能；否则 ID+0x200 会被忽略。 */
+    app_chassis_dm_set_speed_mode();
+
+    /* 与基线一致：使能连发多轮，每轮同时把速度目标清零。 */
+    for (round = 0U; round < 3U; round++) {
+        app_chassis_dm_enable_all(HAL_GetTick());
+        for (i = 0U; i < CHASSIS_DRIVE_MAX; i++) {
+            (void)motor_dm_speed(MOTOR_CHASSIS_BUS,
+                                 (uint16_t)(ROBOT_TARGET_MOTOR_CHASSIS_DM_ID_0 + i), 0.0F);
+        }
+        osDelay(100U);
+    }
+
+    /* 等待四路反馈有效后再允许底盘进入运行态；期间周期性重发使能。 */
+    ready = 0U;
+    for (round = 0U; round < 200U; round++) {
+        if ((round % 50U) == 0U) {
+            app_chassis_dm_enable_all(HAL_GetTick());
+        }
+        online = 0U;
+        for (i = 0U; i < CHASSIS_DRIVE_MAX; i++) {
+            if ((motor_mit_get(MOTOR_CHASSIS_BUS,
+                               (uint16_t)(ROBOT_TARGET_MOTOR_CHASSIS_DM_FB_ID_0 + i),
+                               &fb) == MotorOk) &&
+                ((uint32_t)(HAL_GetTick() - fb.last_time) <= ROBOT_CHASSIS_DM_FB_LOST_MS)) {
+                online++;
+            }
+        }
+        app_chassis_heartbeat_ms = HAL_GetTick();
+        if (online >= (uint32_t)app_chassis_ctx.cfg.min_online_motors) {
+            ready = 1U;
+            break;
+        }
+        osDelay(10U);
+    }
+
+    app_chassis_dm_start_ms = HAL_GetTick();
+    app_chassis_dm_last_enable_ms = HAL_GetTick();
+    app_chassis_dm_ready = ready;
+}
+
+static void app_chassis_dm_force_stop(uint32_t now_ms)
+{
+    uint32_t i;
+
+    if ((uint32_t)(now_ms - app_chassis_dm_last_stop_ms) < ROBOT_CHASSIS_DM_STOP_PERIOD_MS) {
+        return;
+    }
+    app_chassis_dm_last_stop_ms = now_ms;
+
+    if (app_chassis_dm_fault_latched == 0U) {
+        app_chassis_dm_fault_latched = 1U;
+        app_chassis_dm_fault_count++;
+    }
+
+    for (i = 0U; i < CHASSIS_DRIVE_MAX; i++) {
+        (void)motor_dm_speed_stop(MOTOR_CHASSIS_BUS,
+                                  (uint16_t)(ROBOT_TARGET_MOTOR_CHASSIS_DM_ID_0 + i));
+    }
+}
+#endif
+
 static void app_chassis_entry(void *argument)
 {
     ChassisInput input;
@@ -747,22 +1154,100 @@ static void app_chassis_entry(void *argument)
     motor_status_t drive_send;
     motor_status_t steer_send;
     uint64_t now_us;
+    uint32_t now_ms;
     uint8_t observe_ready;
     uint8_t zero_out;
+    uint8_t dm_fault = 0U;
+#if defined(ROBOT_CHASSIS_DRIVE_MODE_DM_SPEED)
+    uint32_t dm_now_ms = 0U;
+    uint32_t i;
+#endif
+    uint32_t wake_tick = osKernelGetTickCount();
 
     (void)argument;
 
+#if defined(ROBOT_CHASSIS_DRIVE_MODE_DM_SPEED)
+    app_chassis_dm_start();
+#endif
+
     while (1) {
         now_us = bsp_timebase_now_us();
+        now_ms = (uint32_t)(now_us / 1000ULL);
+        app_chassis_heartbeat_ms = now_ms;
         app_chassis_fill_input(now_us, &input, drive_status, steer_status, &observe_ready);
+
+#if defined(ROBOT_CHASSIS_DRIVE_MODE_DM_SPEED)
+        /* DM 的反馈时间戳来自 HAL_GetTick()，所有 DM 计时统一用同一时间源。 */
+        dm_now_ms = HAL_GetTick();
+        for (i = 0U; i < CHASSIS_DRIVE_MAX; i++) {
+            if (input.drive_fb[i].online != 0U) {
+                float32_t fb_speed = input.drive_fb[i].speed;
+
+                if (app_chassis_dm_fb_seen[i] == 0U) {
+                    app_chassis_dm_fb_seen[i] = 1U;
+                    app_chassis_dm_fb_min[i] = fb_speed;
+                    app_chassis_dm_fb_max[i] = fb_speed;
+                } else {
+                    if (fb_speed < app_chassis_dm_fb_min[i]) {
+                        app_chassis_dm_fb_min[i] = fb_speed;
+                    }
+                    if (fb_speed > app_chassis_dm_fb_max[i]) {
+                        app_chassis_dm_fb_max[i] = fb_speed;
+                    }
+                }
+            }
+        }
+        dm_fault = ((app_chassis_dm_ready == 0U) ||
+                    (app_chassis_dm_fault_latched != 0U) ||
+                    (app_chassis_emergency != 0U) ||
+                    (app_chassis_drive_count(&input) <
+                     app_chassis_ctx.cfg.min_online_motors))
+                       ? 1U
+                       : 0U;
+#else
+        dm_fault = 0U;
+#endif
 
         (void)memset(&output, 0, sizeof(output));
         chassis_status = chassis_step(&app_chassis_ctx, &input, &output);
-        if ((chassis_status != ChassisOk) || (output.send_enable == 0U)) {
+        if ((chassis_status != ChassisOk) || (output.send_enable == 0U) || (dm_fault != 0U)) {
             (void)memset(&output, 0, sizeof(output));
         }
 
+#if defined(ROBOT_CHASSIS_DRIVE_MODE_DM_SPEED)
+        /* 运行中周期性重发使能，补偿单帧丢失；故障锁存后不再使能。 */
+        if ((dm_fault == 0U) &&
+            (app_chassis_dm_fault_latched == 0U) &&
+            ((uint32_t)(dm_now_ms - app_chassis_dm_last_enable_ms) >=
+             ROBOT_CHASSIS_DM_ENABLE_PERIOD_MS)) {
+            app_chassis_dm_enable_all(dm_now_ms);
+        }
+#endif
+
         app_chassis_send(&output, chassis_status, &drive_send, &steer_send, &zero_out);
+
+#if defined(ROBOT_CHASSIS_DRIVE_MODE_DM_SPEED)
+        if (drive_send != MotorOk) {
+            app_chassis_dm_tx_drop_count++;
+        }
+        if (dm_fault != 0U) {
+            if (app_chassis_dm_fault_since_ms == 0U) {
+                app_chassis_dm_fault_since_ms = dm_now_ms;
+            }
+            /* 启动后 2000 ms 内允许反馈短暂不完整，不锁存故障。 */
+            if (((uint32_t)(dm_now_ms - app_chassis_dm_start_ms) >= 2000U) &&
+                ((uint32_t)(dm_now_ms - app_chassis_dm_fault_since_ms) >=
+                 ROBOT_CHASSIS_DM_DISABLE_AFTER_MS)) {
+                app_chassis_dm_force_stop(dm_now_ms);
+            }
+        } else {
+            app_chassis_dm_fault_since_ms = 0U;
+        }
+        if (app_chassis_dm_fault_latched != 0U) {
+            app_chassis_dm_force_stop(dm_now_ms);
+        }
+#endif
+
         app_chassis_commit(&input,
                            &output,
                            chassis_status,
@@ -774,7 +1259,12 @@ static void app_chassis_entry(void *argument)
                            zero_out,
                            now_us);
 
-        osDelay(APP_CHASSIS_MS_TO_TICKS(APP_CHASSIS_PERIOD_MS));
+        wake_tick += APP_CHASSIS_MS_TO_TICKS(APP_CHASSIS_PERIOD_MS);
+        if ((int32_t)(osKernelGetTickCount() - wake_tick) > 0) {
+            app_chassis_overrun_count++;
+            wake_tick = osKernelGetTickCount();
+        }
+        (void)osDelayUntil(wake_tick);
     }
 }
 
@@ -795,6 +1285,29 @@ uint8_t app_chassis_init(void)
     (void)memset(&app_chassis_diag, 0, sizeof(app_chassis_diag));
     (void)memset(&app_chassis_power, 0, sizeof(app_chassis_power));
     (void)memset(&app_chassis_impl, 0, sizeof(app_chassis_impl));
+
+    app_chassis_heartbeat_ms = HAL_GetTick();
+    app_chassis_overrun_count = 0U;
+    app_chassis_emergency = 0U;
+#if defined(ROBOT_CHASSIS_DRIVE_MODE_DM_SPEED)
+    app_chassis_dm_ready = 0U;
+    app_chassis_dm_fault_since_ms = 0U;
+    app_chassis_dm_last_stop_ms = 0U;
+    app_chassis_dm_fault_latched = 0U;
+    app_chassis_dm_fault_count = 0U;
+    app_chassis_dm_tx_drop_count = 0U;
+    app_chassis_dm_last_enable_ms = 0U;
+    app_chassis_dm_enable_count = 0U;
+    app_chassis_dm_enable_fail_count = 0U;
+    app_chassis_dm_mode_ok_count = 0U;
+    app_chassis_dm_mode_fail_count = 0U;
+    for (uint32_t i = 0U; i < CHASSIS_DRIVE_MAX; i++) {
+        app_chassis_dm_fb_min[i] = 0.0F;
+        app_chassis_dm_fb_max[i] = 0.0F;
+        app_chassis_dm_fb_seen[i] = 0U;
+        app_chassis_dm_mode_value[i] = 0xFFFFFFFFU;
+    }
+#endif
 
     app_chassis_make_cfg(&cfg);
     status = chassis_init(&app_chassis_ctx, &cfg, &app_chassis_impl);
@@ -880,4 +1393,16 @@ uint8_t app_chassis_set_power(float32_t power, float32_t limit, float32_t buffer
     app_chassis_exit(primask);
 
     return 1U;
+}
+
+uint8_t app_chassis_heartbeat_alive(uint32_t now_ms)
+{
+    return (((uint32_t)(now_ms - app_chassis_heartbeat_ms) <= APP_CHASSIS_CMD_STALE_MS)
+                ? 1U
+                : 0U);
+}
+
+void app_chassis_emergency_stop(void)
+{
+    app_chassis_emergency = 1U;
 }

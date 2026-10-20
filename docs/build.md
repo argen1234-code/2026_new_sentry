@@ -55,7 +55,17 @@ cmake --preset Debug -DROBOT_TARGET=board_only_dm02
 cmake --build --preset Debug
 ```
 
-可选值：`sentry_2026`、`sentry_2026_bringup`、`infantry_steer_2025`、`board_only_dm02`。
+可选值：
+
+| target | 用途 |
+|---|---|
+| `sentry_2026` | 2026 哨兵整车（云台板，当前默认） |
+| `sentry_2026_bringup` | 台架启动，仅 Communication + USB 桥 |
+| `sentry_2026_chassis` | 底盘 DM6215 原生速度模式验证（同板启用底盘） |
+| `can1_dmh6215_test` | CAN1 DMH6215 单轮/四轮台架 |
+| `can1_dmh6215_angle_test` | CAN1 单电机角度 PID 台架 |
+| `infantry_steer_2025` | 2025 舵轮步兵 |
+| `board_only_dm02` | DM02 光板资源测试 |
 
 台架调试（只启动 Communication + USB 桥接）：
 
@@ -120,6 +130,6 @@ colcon build --symlink-install
 
 ## 4. 环境备注
 
-- Jetson 当前 Wi‑Fi 地址：`192.168.31.183`（建议在路由器做 DHCP 保留）。
-- 远程桌面：RustDesk 1.5.0，IP 直连端口 `21118`，服务已设置开机自启。
-- 本机 `/etc/hosts` 存在 Steam++ 的 GitHub 重定向规则，访问 GitHub 时需注意。
+- Jetson 与开发机的具体 IP、远程桌面和代理设置属于本机环境事实，不写入仓库；以现场网络为准。
+- Jetson 只有 8 GiB 统一内存，ROS 编译必须使用 `ros_ws/scripts/build_lowmem.sh`，不要直接 `colcon build -j6`。
+- 串口/USB 设备建议用 udev 规则或 VID:PID 固定，不依赖 `/dev/ttyUSB*` 编号。

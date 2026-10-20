@@ -264,6 +264,15 @@ typedef enum
 } ChassisType;
 
 /**
+ * @brief 底盘驱动输出语义。
+ */
+typedef enum
+{
+    ChassisDriveModeCurrent = 0, /**< 输出电流/力矩，速度环在 STM32。 */
+    ChassisDriveModeSpeed = 1    /**< 输出速度目标，速度环在电机内部。 */
+} ChassisDriveMode;
+
+/**
  * @brief 底盘模式。
  */
 typedef enum
@@ -383,6 +392,8 @@ typedef struct
 typedef struct
 {
     ChassisType type;                                      /**< 当前构型类型。 */
+    ChassisDriveMode drive_mode;                           /**< 驱动输出语义。 */
+    uint8_t min_online_motors;                             /**< 允许运行的最少在线驱动轮数。 */
     ChassisPidCfg drive_pid;                               /**< 驱动轮速度 PID。 */
     ChassisPidCfg steer_angle_pid;                         /**< 舵向角度 PID。 */
     ChassisPidCfg steer_speed_pid;                         /**< 舵向速度 PID。 */
