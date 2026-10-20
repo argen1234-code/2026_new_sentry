@@ -210,6 +210,16 @@ extern "C" {
 #define CHASSIS_WZ_SCALE_DEFAULT 0.1F
 #endif
 
+/** @brief 默认平移速度变化率上限，单位 m/s^2。 */
+#ifndef CHASSIS_TRANSLATION_SLEW_DEFAULT
+#define CHASSIS_TRANSLATION_SLEW_DEFAULT 2.5F
+#endif
+
+/** @brief 默认旋转角速度变化率上限，单位 rad/s^2。 */
+#ifndef CHASSIS_ROTATION_SLEW_DEFAULT
+#define CHASSIS_ROTATION_SLEW_DEFAULT 4.0F
+#endif
+
 /** @brief 默认轮到中心距离。 */
 #ifndef CHASSIS_CENTER_DIST_DEFAULT
 #define CHASSIS_CENTER_DIST_DEFAULT 0.22F
@@ -414,6 +424,8 @@ typedef struct
     float32_t mecanum_center;                              /**< 麦轮到中心距离。 */
     float32_t omni_center;                                 /**< 全向轮到中心距离。 */
     float32_t wz_scale;                                    /**< 旋转速度缩放。 */
+    float32_t translation_slew;                            /**< 平移速度变化率上限，单位 m/s^2。 */
+    float32_t rotation_slew;                               /**< 旋转角速度变化率上限，单位 rad/s^2。 */
     float32_t half_length;                                 /**< 舵轮半车长。 */
     float32_t half_width;                                  /**< 舵轮半车宽。 */
     float32_t steer_zero[CHASSIS_STEER_MAX];               /**< 舵向零位偏置。 */

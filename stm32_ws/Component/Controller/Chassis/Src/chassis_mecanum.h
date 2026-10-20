@@ -67,6 +67,10 @@ typedef struct
     PowerCtrl power;                                       /**< 驱动电机功率预测控制器。 */
     ChassisMecanumWheel wheel[CHASSIS_MECANUM_WHEEL_NUM];  /**< 驱动轮状态。 */
     int16_t current[CHASSIS_MECANUM_WHEEL_NUM];            /**< 输出电流。 */
+    float32_t smooth_vx;                                   /**< 平滑后的纵向速度。 */
+    float32_t smooth_vy;                                   /**< 平滑后的横向速度。 */
+    float32_t smooth_wz;                                   /**< 平滑后的角速度。 */
+    uint32_t smooth_tick_ms;                               /**< 上次平滑时间，单位 ms。 */
     uint8_t ready;                                         /**< 非 0 表示构型已初始化。 */
 } ChassisMecanumCtx;
 

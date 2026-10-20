@@ -355,6 +355,8 @@ static void app_chassis_make_cfg(ChassisCfg *cfg)
     cfg->mecanum_center = ROBOT_CHASSIS_CENTER_DIST;
     cfg->omni_center = ROBOT_CHASSIS_CENTER_DIST;
     cfg->wz_scale = ROBOT_CHASSIS_WZ_SET_SCALE;
+    cfg->translation_slew = ROBOT_CHASSIS_TRANSLATION_SLEW;
+    cfg->rotation_slew = ROBOT_CHASSIS_ROTATION_SLEW;
     cfg->half_length = ROBOT_CHASSIS_HALF_LENGTH;
     cfg->half_width = ROBOT_CHASSIS_HALF_WIDTH;
     cfg->steer_zero[0] = ROBOT_CHASSIS_STEER_ZERO_0;
@@ -551,6 +553,38 @@ static void app_chassis_fill_cmd(ChassisInput *input)
     }
     {
         uint32_t elapsed_ms = (uint32_t)(HAL_GetTick() - app_chassis_bench_start_ms);
+
+#if APP_CHASSIS_BENCH_MECANUM != 0U
+        /* 0° 为前进，逆时针每 45° 一个方向；对角线方向组件按 1/sqrt(2) 缩放。 */
+        static const float32_t dir_vx[8] = {
+            1.0F, 0.70710678F, 0.0F, -0.70710678F,
+            -1.0F, -0.70710678F, 0.0F, 0.70710678F
+        };
+        static const float32_t dir_vy[8] = {
+            0.0F, 0.70710678F, 1.0F, 0.70710678F,
+            0.0F, -0.70710678F, -1.0F, -0.70710678F
+        };
+        uint32_t step_ms = APP_CHASSIS_BENCH_DIR_MS + APP_CHASSIS_BENCH_PAUSE_MS;
+        uint32_t total_ms = step_ms * 8U;
+
+        if (elapsed_ms < total_ms) {
+            uint32_t dir = elapsed_ms / step_ms;
+            uint32_t phase = elapsed_ms % step_ms;
+
+            input->cmd.online = 1U;
+            input->cmd.mode = ChassisModeNoFollow;
+            input->cmd.wz = 0.0F;
+            if (phase < APP_CHASSIS_BENCH_DIR_MS) {
+                input->cmd.vx = APP_CHASSIS_BENCH_MECANUM_MPS * dir_vx[dir];
+                input->cmd.vy = APP_CHASSIS_BENCH_MECANUM_MPS * dir_vy[dir];
+            } else {
+                input->cmd.vx = 0.0F;
+                input->cmd.vy = 0.0F;
+            }
+        } else {
+            input->cmd.force_stop = 1U;
+        }
+#else
         float32_t bench_vx = APP_CHASSIS_BENCH_VX_MPS;
 
         if (elapsed_ms < APP_CHASSIS_BENCH_MS) {
@@ -568,6 +602,7 @@ static void app_chassis_fill_cmd(ChassisInput *input)
         } else {
             input->cmd.force_stop = 1U;
         }
+#endif
     }
 #endif
 }

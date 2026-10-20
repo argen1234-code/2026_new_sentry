@@ -122,6 +122,8 @@ extern "C" {
 #define ROBOT_CHASSIS_MAX_SPEED_Y                 2.5F                               /**< 普通模式最大 vy。 */
 #define ROBOT_CHASSIS_WZ_SET_SCALE                1.0F                               /**< wz 分解整定系数。 */
 #define ROBOT_CHASSIS_CENTER_DIST                 0.3077F                            /**< 麦轮 L/2 + W/2，来自 URDF 轮位置。 */
+#define ROBOT_CHASSIS_TRANSLATION_SLEW            2.5F                               /**< 平移速度变化率上限，单位 m/s^2。 */
+#define ROBOT_CHASSIS_ROTATION_SLEW               4.0F                               /**< 旋转角速度变化率上限，单位 rad/s^2。 */
 #define ROBOT_CHASSIS_HALF_LENGTH_M               0.1716F                            /**< URDF 半轴距。 */
 #define ROBOT_CHASSIS_HALF_WIDTH_M                0.1362F                            /**< URDF 平均半轮距。 */
 #define ROBOT_CHASSIS_HALF_LENGTH                 0.20F                              /**< 舵轮底盘半车长，单位 m。 */

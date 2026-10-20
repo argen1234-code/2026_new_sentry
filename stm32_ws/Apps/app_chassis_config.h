@@ -65,6 +65,26 @@ extern "C" {
 #define APP_CHASSIS_BENCH_RAMP_MS 0U
 #endif
 
+/** @brief 非 0 表示台架按 8 个方向循环运动。 */
+#ifndef APP_CHASSIS_BENCH_MECANUM
+#define APP_CHASSIS_BENCH_MECANUM 0U
+#endif
+
+/** @brief 8 方向台架每个方向的运行时间，单位 ms。 */
+#ifndef APP_CHASSIS_BENCH_DIR_MS
+#define APP_CHASSIS_BENCH_DIR_MS 5000U
+#endif
+
+/** @brief 8 方向台架相邻方向之间的停顿时间，单位 ms。 */
+#ifndef APP_CHASSIS_BENCH_PAUSE_MS
+#define APP_CHASSIS_BENCH_PAUSE_MS 500U
+#endif
+
+/** @brief 8 方向台架的车身速度幅值，单位 m/s。 */
+#ifndef APP_CHASSIS_BENCH_MECANUM_MPS
+#define APP_CHASSIS_BENCH_MECANUM_MPS 0.3F
+#endif
+
 #ifdef __cplusplus
 }
 #endif

@@ -77,6 +77,30 @@ static float32_t chassis_mecanum_clamp(float32_t value, float32_t limit)
 }
 
 /**
+ * @brief 按最大变化量把当前值推向目标值。
+ *
+ * @param current 当前值。
+ * @param target 目标值。
+ * @param max_delta 本周期允许的最大变化量。
+ * @return 平滑后的值。
+ */
+static float32_t chassis_mecanum_slew(float32_t current,
+                                      float32_t target,
+                                      float32_t max_delta)
+{
+    float32_t delta = target - current;
+
+    if (delta > max_delta) {
+        return current + max_delta;
+    }
+    if (delta < -max_delta) {
+        return current - max_delta;
+    }
+
+    return target;
+}
+
+/**
  * @brief 将浮点电流转换为 int16_t。
  *
  * @param value 浮点电流。
@@ -193,6 +217,10 @@ static void chassis_mecanum_cfg(ChassisCfg *cfg)
     cfg->power_limit = chassis_mecanum_pick(cfg->power_limit, CHASSIS_POWER_LIMIT_DEFAULT);
     cfg->mecanum_center = chassis_mecanum_pick(cfg->mecanum_center, CHASSIS_CENTER_DIST_DEFAULT);
     cfg->wz_scale = chassis_mecanum_pick(cfg->wz_scale, CHASSIS_WZ_SCALE_DEFAULT);
+    cfg->translation_slew = chassis_mecanum_pick(cfg->translation_slew,
+                                                 CHASSIS_TRANSLATION_SLEW_DEFAULT);
+    cfg->rotation_slew = chassis_mecanum_pick(cfg->rotation_slew,
+                                              CHASSIS_ROTATION_SLEW_DEFAULT);
     chassis_mecanum_pid_default(&cfg->drive_pid,
                                 CHASSIS_DRIVE_PID_KP_DEFAULT,
                                 CHASSIS_DRIVE_PID_KI_DEFAULT,
@@ -223,6 +251,19 @@ static void chassis_mecanum_zero(ChassisMecanumCtx *ctx)
         ctx->current[i] = 0;
     }
     ctx->mode = ChassisModeStop;
+}
+
+/**
+ * @brief 复位速度命令平滑状态。
+ *
+ * @param ctx 麦轮上下文。
+ */
+static void chassis_mecanum_reset_smoothing(ChassisMecanumCtx *ctx)
+{
+    ctx->smooth_vx = 0.0F;
+    ctx->smooth_vy = 0.0F;
+    ctx->smooth_wz = 0.0F;
+    ctx->smooth_tick_ms = 0U;
 }
 
 /**
@@ -444,12 +485,14 @@ ChassisStatus chassis_mecanum_control(Chassis *chassis, void *impl, const Chassi
     chassis_mecanum_zero(ctx);
 
     if ((input->cmd.online == 0U) || (input->cmd.force_stop != 0U) || (input->cmd.mode == ChassisModeStop)) {
+        chassis_mecanum_reset_smoothing(ctx);
         return ChassisOk;
     }
 
     ctx->mode = input->cmd.mode;
 
     if (input->cmd.mode == ChassisModeRaw) {
+        chassis_mecanum_reset_smoothing(ctx);
         if (cfg->drive_mode == ChassisDriveModeSpeed) {
             /* 速度模式下 raw 电流没有语义，按停止处理。 */
             chassis_mecanum_zero(ctx);
@@ -483,7 +526,36 @@ ChassisStatus chassis_mecanum_control(Chassis *chassis, void *impl, const Chassi
         return ChassisState;
     }
 
-    chassis_mecanum_kin(cfg, input->cmd.vx, input->cmd.vy, input->cmd.wz + chassis_mecanum_yaw(ctx, input), wheel_speed);
+    {
+        float32_t dt_s;
+        float32_t max_step;
+
+        /* 与 2026_robot_base 一致：先对 Vx/Vy/Wz 做变化率限制，再分解到四轮。 */
+        if (ctx->smooth_tick_ms == 0U) {
+            dt_s = 0.005F;
+        } else {
+            dt_s = (float32_t)(input->tick_ms - ctx->smooth_tick_ms) * 0.001F;
+            if (dt_s < 0.001F) {
+                dt_s = 0.001F;
+            } else if (dt_s > 0.05F) {
+                dt_s = 0.05F;
+            }
+        }
+        ctx->smooth_tick_ms = input->tick_ms;
+
+        max_step = cfg->translation_slew * dt_s;
+        ctx->smooth_vx = chassis_mecanum_slew(ctx->smooth_vx, input->cmd.vx, max_step);
+        ctx->smooth_vy = chassis_mecanum_slew(ctx->smooth_vy, input->cmd.vy, max_step);
+
+        max_step = cfg->rotation_slew * dt_s;
+        ctx->smooth_wz = chassis_mecanum_slew(ctx->smooth_wz, input->cmd.wz, max_step);
+    }
+
+    chassis_mecanum_kin(cfg,
+                        ctx->smooth_vx,
+                        ctx->smooth_vy,
+                        ctx->smooth_wz + chassis_mecanum_yaw(ctx, input),
+                        wheel_speed);
     chassis_mecanum_limit_speed(cfg, wheel_speed);
 
     if (cfg->drive_mode == ChassisDriveModeSpeed) {
@@ -556,6 +628,7 @@ ChassisStatus chassis_mecanum_sync(Chassis *chassis, void *impl)
         ctx->wheel[i].speed_set = ctx->wheel[i].speed;
     }
     chassis_mecanum_pid_reset(&ctx->yaw_pid);
+    chassis_mecanum_reset_smoothing(ctx);
 
     return ChassisOk;
 }
