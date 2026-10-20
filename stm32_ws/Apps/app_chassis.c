@@ -166,6 +166,14 @@ static uint32_t app_chassis_dm_mode_value[CHASSIS_DRIVE_MAX];
 /** @brief 运行期间每个驱动轮的反馈离线周期计数。 */
 static uint32_t app_chassis_drive_offline_count[CHASSIS_DRIVE_MAX];
 
+/** @brief 每个驱动轮首次起转、首次达到目标 80%、首次使能的时间。 */
+static uint32_t app_chassis_drive_first_move_ms[CHASSIS_DRIVE_MAX];
+static uint32_t app_chassis_drive_first_full_ms[CHASSIS_DRIVE_MAX];
+static uint32_t app_chassis_drive_first_enabled_ms[CHASSIS_DRIVE_MAX];
+static uint8_t app_chassis_drive_first_move_seen[CHASSIS_DRIVE_MAX];
+static uint8_t app_chassis_drive_first_full_seen[CHASSIS_DRIVE_MAX];
+static uint8_t app_chassis_drive_first_enabled_seen[CHASSIS_DRIVE_MAX];
+
 /** @brief 首次进入故障状态时的驱动轮在线掩码。 */
 static uint8_t app_chassis_dm_fault_mask;
 
@@ -955,6 +963,9 @@ static void app_chassis_commit(const ChassisInput *input,
         app_chassis_diag.drive_speed_fb_min[i] = app_chassis_dm_fb_min[i];
         app_chassis_diag.drive_speed_fb_max[i] = app_chassis_dm_fb_max[i];
         app_chassis_diag.drive_offline_count[i] = app_chassis_drive_offline_count[i];
+        app_chassis_diag.drive_first_move_ms[i] = app_chassis_drive_first_move_ms[i];
+        app_chassis_diag.drive_first_full_ms[i] = app_chassis_drive_first_full_ms[i];
+        app_chassis_diag.drive_first_enabled_ms[i] = app_chassis_drive_first_enabled_ms[i];
     }
     app_chassis_diag.dm_fault_mask = app_chassis_dm_fault_mask;
 #endif
@@ -1287,6 +1298,41 @@ static void app_chassis_entry(void *argument)
              ROBOT_CHASSIS_DM_ENABLE_PERIOD_MS)) {
             app_chassis_dm_enable_all(dm_now_ms);
         }
+
+        /* 记录每轮首次使能、首次起转和首次达到目标 80% 的时刻。 */
+        for (i = 0U; i < CHASSIS_DRIVE_MAX; i++) {
+            if (app_chassis_drive_first_enabled_seen[i] == 0U) {
+                motor_mit_fb_t fb_state;
+
+                if ((motor_mit_get(MOTOR_CHASSIS_BUS,
+                                   (uint16_t)(ROBOT_TARGET_MOTOR_CHASSIS_DM_FB_ID_0 + i),
+                                   &fb_state) == MotorOk) &&
+                    (fb_state.fb.state == 1U)) {
+                    app_chassis_drive_first_enabled_seen[i] = 1U;
+                    app_chassis_drive_first_enabled_ms[i] =
+                        (uint32_t)(dm_now_ms - app_chassis_dm_start_ms);
+                }
+            }
+
+            if (input.drive_fb[i].online != 0U) {
+                float32_t fb_speed = input.drive_fb[i].speed;
+                float32_t cmd_speed = output.drive_speed_set[i];
+
+                if ((app_chassis_drive_first_move_seen[i] == 0U) &&
+                    (fabsf(fb_speed) > 0.01F)) {
+                    app_chassis_drive_first_move_seen[i] = 1U;
+                    app_chassis_drive_first_move_ms[i] =
+                        (uint32_t)(dm_now_ms - app_chassis_dm_start_ms);
+                }
+                if ((app_chassis_drive_first_full_seen[i] == 0U) &&
+                    (fabsf(cmd_speed) > 0.01F) &&
+                    (fabsf(fb_speed) >= (0.8F * fabsf(cmd_speed)))) {
+                    app_chassis_drive_first_full_seen[i] = 1U;
+                    app_chassis_drive_first_full_ms[i] =
+                        (uint32_t)(dm_now_ms - app_chassis_dm_start_ms);
+                }
+            }
+        }
 #endif
 
         app_chassis_send(&output, chassis_status, &drive_send, &steer_send, &zero_out);
@@ -1373,6 +1419,12 @@ uint8_t app_chassis_init(void)
         app_chassis_dm_fb_seen[i] = 0U;
         app_chassis_dm_mode_value[i] = 0xFFFFFFFFU;
         app_chassis_drive_offline_count[i] = 0U;
+        app_chassis_drive_first_move_ms[i] = 0xFFFFFFFFU;
+        app_chassis_drive_first_full_ms[i] = 0xFFFFFFFFU;
+        app_chassis_drive_first_enabled_ms[i] = 0xFFFFFFFFU;
+        app_chassis_drive_first_move_seen[i] = 0U;
+        app_chassis_drive_first_full_seen[i] = 0U;
+        app_chassis_drive_first_enabled_seen[i] = 0U;
     }
 #endif
 

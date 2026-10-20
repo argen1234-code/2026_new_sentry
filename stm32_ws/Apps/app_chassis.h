@@ -58,6 +58,9 @@ typedef struct
     float32_t drive_speed_fb_min[CHASSIS_DRIVE_MAX]; /**< 运行期间反馈速度最小值，m/s。 */
     float32_t drive_speed_fb_max[CHASSIS_DRIVE_MAX]; /**< 运行期间反馈速度最大值，m/s。 */
     uint32_t drive_offline_count[CHASSIS_DRIVE_MAX]; /**< 每个驱动轮反馈离线周期计数。 */
+    uint32_t drive_first_move_ms[CHASSIS_DRIVE_MAX]; /**< 相对启动，首次 |反馈|>0.01 m/s 的时间。 */
+    uint32_t drive_first_full_ms[CHASSIS_DRIVE_MAX]; /**< 相对启动，首次达到目标 80% 的时间。 */
+    uint32_t drive_first_enabled_ms[CHASSIS_DRIVE_MAX]; /**< 相对启动，首次反馈 state=1 的时间。 */
     uint8_t dm_fault_mask;                       /**< 首次进入 DM 故障时的在线掩码。 */
     uint8_t dm_fault_latched;                    /**< 非 0 表示 DM 故障已锁存。 */
     uint32_t last_tick_ms;                       /**< 最近一次周期 tick，单位 ms。 */

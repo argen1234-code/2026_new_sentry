@@ -247,9 +247,10 @@ openocd -f interface/cmsis-dap.cfg -f target/stm32h7x.cfg \
 - DM 电机必须先写/读回并保存 `CTRL_MODE=3`（RID `0x0A`），再使能；
   速度模式的使能/失能要发到 `ID + 0x200`，不能发在基础 ID。
   反馈 `state` 字节高 4 位 `0=失能 / 1=使能`，不能只看反馈是否在线。
-- `sentry_2026_chassis` 已跑通四轮 DM 原生速度模式：2 ms 控制周期、轮端
-  `0.3 rad/s`、20 s，四轮净转约 ±6 rad；左后“在线但不动”的根因是
-  `CTRL_MODE` 丢失，启动时补写并读回后恢复正常。台架注入开关为
+- `sentry_2026_chassis` 已跑通四轮 DM 原生速度模式：**5 ms 控制周期、
+  每 20 ms 重发使能**，轮端最高验证到 **10 rad/s**（车身 `0.45 m/s`）。
+  左后“在线但不动”的根因是 `CTRL_MODE` 丢失；左后速度目标还需要使能帧
+  刷新，500 ms 使能周期会造成约 0.5 s 起转延迟。台架注入开关为
   `APP_CHASSIS_BENCH_TEST`，上车前必须置 0。
 - `sentry_2026` 的 map/param 目前继承 `infantry_steer_2025`，实车接线、电机 ID 和 PID 参数需要按哨兵硬件标定。
 - 全功能 `sentry_2026` 在 2026-10-19 台架上曾卡在 `app_observe_init`（IMU/observer 初始化失败）；台架调试仍建议使用 `sentry_2026_bringup`。后续 IMU MVP 修改后需重新验证。
