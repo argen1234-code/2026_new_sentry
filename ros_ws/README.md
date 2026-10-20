@@ -18,7 +18,9 @@ src/
 ├── sentry_perception/                     点云地形分析、点云转激光、扫描生成
 ├── sentry_navigation/                     Nav2 插件、控制器、行为树与参数
 ├── sentry_decision/                       比赛决策与底盘指令发布
-└── sentry_bringup/                        实车一键启动入口
+├── sentry_bringup/                        实车一键启动入口
+├── mecanum_car_model/                     当前麦轮小车 CAD 模型（URDF + mesh）
+└── robot_base_description/                麦轮小车 xacro / launch / RViz
 ```
 
 工作空间级资源：
@@ -54,6 +56,8 @@ scripts/
 | `pb_teleop_twist_joy`、`fake_vel_transform` | 遥控与速度变换 |
 | `sentry_decision` | 比赛决策节点 |
 | `sentry_bringup` | `sentry.launch.py` 统一入口 |
+| `mecanum_car_model` | 当前麦轮小车 CAD 模型：URDF、CSV、STL mesh |
+| `robot_base_description` | 麦轮小车 xacro、RViz 与 view_robot launch |
 
 ## 依赖方向
 

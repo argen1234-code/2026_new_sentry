@@ -1,0 +1,52 @@
+<?xml version="1.0"?>
+<robot name="robot_base" xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <!-- Preserve the SolidWorks geometry and all four wheel joints. -->
+  <xacro:arg name="use_gazebo" default="false"/>
+  <xacro:include filename="$(find mecanum_car_model)/urdf/mecanum_car_model.urdf"/>
+
+  <link name="base_footprint"/>
+  <joint name="base_footprint_joint" type="fixed">
+    <parent link="base_footprint"/><child link="base_link"/>
+    <origin xyz="0 0 0.069" rpy="0 0 0"/>
+  </joint>
+
+  <!-- CAD mesh/wheel maximum XY radius is 0.265 m; allow 35 mm for attachments. -->
+  <link name="navigation_footprint">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><cylinder radius="0.30" length="0.01"/></geometry>
+      <material name="navigation_boundary"><color rgba="0.0 0.75 0.85 0.30"/></material>
+    </visual>
+    <!-- Nav2 handles clearance in simulation; an extra Gazebo contact disk would drag on the floor. -->
+    <xacro:unless value="$(arg use_gazebo)">
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry><cylinder radius="0.30" length="0.01"/></geometry>
+      </collision>
+    </xacro:unless>
+  </link>
+  <joint name="navigation_footprint_joint" type="fixed">
+    <parent link="base_footprint"/><child link="navigation_footprint"/>
+    <origin xyz="0 0 0.02" rpy="0 0 0"/>
+  </joint>
+
+  <!-- CAD front wheels are at -X. Rotate CAD -X onto base_link +X,
+       which is the measured forward direction of laser_frame +Y. -->
+  <link name="base_link"/>
+  <joint name="cad_mount_joint" type="fixed">
+    <parent link="base_link"/><child link="cad_base_link"/>
+    <origin xyz="0 0 0" rpy="0 0 3.141592653589793"/>
+  </joint>
+
+  <!-- The lidar +Y axis is the confirmed vehicle-forward direction. -->
+  <link name="laser_frame"/>
+  <joint name="laser_joint" type="fixed">
+    <parent link="base_link"/><child link="laser_frame"/>
+    <origin xyz="0.15 0 0.15" rpy="0 0 -1.5707963267948966"/>
+  </joint>
+
+  <xacro:if value="$(arg use_gazebo)">
+    <xacro:include filename="$(find robot_base_description)/urdf/robot_base.gazebo.xacro"/>
+    <xacro:gazebo_sim/>
+  </xacro:if>
+</robot>
