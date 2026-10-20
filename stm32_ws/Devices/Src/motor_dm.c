@@ -46,9 +46,10 @@ const MitMotorLimit DmMotorLimit4310 = {
     -20.0F, 20.0F
 };
 
+/* DM-H6215 V2.0 说明书 7.1.6：P_MAX=12.5，V_MAX=45，T_MAX=10。 */
 const MitMotorLimit DmMotorLimit6215 = {
     -12.5F, 12.5F,
-    -200.0F, 200.0F,
+    -45.0F, 45.0F,
     0.0F, 500.0F,
     0.0F, 5.0F,
     -10.0F, 10.0F

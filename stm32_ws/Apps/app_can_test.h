@@ -71,6 +71,60 @@ extern volatile uint32_t app_can_test_rec;
 /** @brief FDCAN 协议状态寄存器。 */
 extern volatile uint32_t app_can_test_psr;
 
+/* ==========================================================================
+ * 保守驱动测试状态
+ * --------------------------------------------------------------------------
+ * 这些变量只在 APP_CAN_TEST_CONSERVATIVE=1 时由状态机更新，便于 GDB 读取。
+ * ========================================================================== */
+
+#define APP_CAN_TEST_SAFE_STATE_IDLE               0U  /**< 未开始。 */
+#define APP_CAN_TEST_SAFE_STATE_WAIT_FEEDBACK      1U  /**< 等待目标电机首帧反馈。 */
+#define APP_CAN_TEST_SAFE_STATE_SETTLE             2U  /**< 零力矩稳定阶段。 */
+#define APP_CAN_TEST_SAFE_STATE_RUN                3U  /**< 低速斜坡/保持阶段。 */
+#define APP_CAN_TEST_SAFE_STATE_STOP               4U  /**< 正在执行停止序列。 */
+#define APP_CAN_TEST_SAFE_STATE_DONE               5U  /**< 已停止并静默。 */
+
+#define APP_CAN_TEST_SAFE_REASON_NONE              0U  /**< 无异常。 */
+#define APP_CAN_TEST_SAFE_REASON_RUN_DONE          1U  /**< 正常跑完时长。 */
+#define APP_CAN_TEST_SAFE_REASON_NO_FEEDBACK       2U  /**< 启动后没有反馈。 */
+#define APP_CAN_TEST_SAFE_REASON_FEEDBACK_LOST     3U  /**< 运行中反馈中断。 */
+#define APP_CAN_TEST_SAFE_REASON_POS_LIMIT         4U  /**< 位置变化超限。 */
+#define APP_CAN_TEST_SAFE_REASON_STALL             5U  /**< 持续指令下没有转速。 */
+#define APP_CAN_TEST_SAFE_REASON_TIMEOUT           6U  /**< 总超时。 */
+
+/** @brief 保守测试状态机当前状态。 */
+extern volatile uint32_t app_can_test_safe_state;
+
+/** @brief 保守测试停止原因。 */
+extern volatile uint32_t app_can_test_safe_reason;
+
+/** @brief 目标电机的反馈帧计数。 */
+extern volatile uint32_t app_can_test_safe_fb_count;
+
+/** @brief 目标电机最近一帧原始反馈数据。 */
+extern volatile uint8_t app_can_test_safe_fb_data[8];
+
+/** @brief 最近解算的反馈位置，单位 rad。 */
+extern volatile float app_can_test_safe_pos;
+
+/** @brief 最近解算的反馈速度，单位 rad/s。 */
+extern volatile float app_can_test_safe_vel;
+
+/** @brief 启动时的位置基准，单位 rad。 */
+extern volatile float app_can_test_safe_start_pos;
+
+/** @brief 相对启动位置的变化量，单位 rad。 */
+extern volatile float app_can_test_safe_moved_rad;
+
+/** @brief 当前速度指令，单位 rad/s。 */
+extern volatile float app_can_test_safe_cmd_vel;
+
+/** @brief 距最近一帧反馈的时间，单位 ms。 */
+extern volatile uint32_t app_can_test_safe_fb_age_ms;
+
+/** @brief 保守测试已运行时间，单位 ms。 */
+extern volatile uint32_t app_can_test_safe_elapsed_ms;
+
 void app_can_test_init(void);
 
 #ifdef __cplusplus

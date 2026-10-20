@@ -167,19 +167,58 @@ Communication
 
 | 项 | 值 |
 |---|---|
-| 反馈 ID | `0x00` |
+| 反馈 ID | `0x00`（四轮 ID 规划后改为 `0x51`） |
 | 电机 ID | `1`（反馈 `data[0]=0x11`） |
 | TEC / REC | `0 / 0` |
 | 速度指令帧 | `00 00 40 40 00 00 00 00`（float 3.0） |
 | 反馈 | 位置持续变化，电机连续旋转 |
 | 结论 | CAN_H/CAN_L 未接反，原生速度模式可连续运行 |
 
-> DMH6215 的速度反馈量程可能不是旧代码里的 ±200 rad/s；用当前 `DmMotorLimit6215`
-> 解码出的速度值只用于趋势判断，精确标定需要对照达妙文档。
+> DMH6215 的 MIT 量程以说明书 7.1.6 为准：`P_MAX=±12.5 rad`、`V_MAX=±45 rad/s`、
+> `T_MAX=±10 Nm`（旧代码里的 ±200 rad/s 不适用于该型号）。
+
+### 保守低速测试（`APP_CAN_TEST_CONSERVATIVE=1`）
+
+指定 ID 的首次试转使用 MIT 速度控制：`Kp=0`、`t_ff=0`，力矩上限约为
+`Kd * v_des`。速度按斜坡上升/下降，限时后自动零速、零力矩、失能；
+同时有反馈超时、位置变化上限和堵转兜底。
+
+```bash
+cd stm32_ws/Boards
+cmake -S . -B build/can_safe -G Ninja \
+  -DCMAKE_BUILD_TYPE=Debug \
+  -DROBOT_TARGET=can1_dmh6215_test \
+  -DAPP_CAN_TEST_CONSERVATIVE=1 \
+  -DAPP_CAN_TEST_TARGET_ID=3 \
+  -DAPP_CAN_TEST_SAFE_VEL_RAD_S=0.5F
+cmake --build build/can_safe
+openocd -f interface/cmsis-dap.cfg -f target/stm32h7x.cfg \
+  -c "program build/can_safe/CtrlBoard-H7_IMU.elf verify reset exit"
+```
+
+默认参数：`0.5 rad/s`、`Kd=0.5`（最大力矩约 `0.25 Nm`）、斜坡 `500 ms`、
+保持 `1000 ms`、位置变化上限 `1.0 rad`、总超时 `3 s`。
+诊断量：`app_can_test_safe_state/reason`、`app_can_test_safe_pos/vel`、
+`app_can_test_safe_moved_rad`、`app_can_test_safe_fb_count`。
+
+实测（2026-10-19，CAN1 只挂左后 ID 3，反馈 ID `0x53`）：
+
+| 项 | 值 |
+|---|---|
+| 状态 / 原因 | `DONE` / `RUN_DONE` |
+| 反馈帧数 | 244 |
+| TEC / REC | `0 / 0` |
+| 起始 / 结束位置 | `0.0006 / 0.3336 rad` |
+| 位置变化 | 约 `0.305 rad` |
+| 结论 | 正指令使解算位置增大，电机可低速连续转动；结束时已失能 |
+
+> 测试结束后固件停在 `DONE`，但复位/重新上电会重新执行测试。
+> 离开台架前烧回 stop-only 或 `sentry_2026_bringup`。
 
 已记录的底盘方向事实：
 
-- 右后轮（CAN1 / ID 1）：正速度指令 `+3.0` 使车身**后退**，所以车身前进时该轮取负。
+- 右后轮（CAN1 / ID 1 / 反馈 `0x51`）：正速度指令 `+3.0` 使车身**后退**，所以车身前进时该轮取负。
+- 四轮 DMH6215 的统一 ID：右后 `1 / 0x51`、前左 `2 / 0x52`、左后 `3 / 0x53`、前右 `4 / 0x54`。
 - 底盘类型已切换为 `ROBOT_CHASSIS_KIND_MECANUM`。
 - 完整电机映射与待测轮子见 [`docs/hardware.md`](../docs/hardware.md)。
 
@@ -196,6 +235,15 @@ openocd -f interface/cmsis-dap.cfg -f target/stm32h7x.cfg \
 - 已导入 H723 板级基线（HAL / FreeRTOS / USB CDC / CMake / Keil）。
 - 已加入 `sentry_2026` 与台架选项 `sentry_2026_bringup`。
 - USB CDC 桥接已在台架上跑通（约 60 帧/s 双向，0 CRC 错误）。
+- 左后 DMH6215（CAN1 / ID 3 / 反馈 `0x53`）已通过低速保守测试：
+  `0.5 rad/s`、`Kd=0.5`、移动约 `0.305 rad`，`TEC/REC=0`，结束自动失能。
+- 四轮 DMH6215 的发送/反馈 ID 已统一为 `1/0x51`、`2/0x52`、`3/0x53`、`4/0x54`；
+  右后、前左、前右均已单独断电复验保存生效，四台同时上电扫描确认反馈 ID 唯一，
+  `motor_mask=0x1E`、`TEC/REC=0`。
+- 2026-10-20 四轮悬空 `0.3 rad/s`、20 s 前进测试通过；前进符号为
+  RR `-1`、FL `+1`、RL `+1`、FR `-1`。
+- DM 电机必须先读/写 `CTRL_MODE`（RID=10）并保存；速度模式的使能/失能
+  要发到 `ID + 0x200`，不能发在基础 ID。
 - `sentry_2026` 的 map/param 目前继承 `infantry_steer_2025`，实车接线、电机 ID 和 PID 参数需要按哨兵硬件标定。
 - 全功能 `sentry_2026` 目前在台架上卡在 `app_observe_init`（IMU/observer 初始化失败）；台架调试请使用 `sentry_2026_bringup`。
 - 已确认 HAL tick 优先级必须为 0，否则 FreeRTOS 启动前的 `BASEPRI=0x50` 会屏蔽 TIM6，导致 `HAL_Delay` 卡死。

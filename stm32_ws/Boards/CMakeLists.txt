@@ -66,12 +66,26 @@ else()
 endif()
 message(STATUS "Firmware option: ${ROBOT_TARGET}")
 
-# CAN 测试构建变体：APP_CAN_TEST_STOP_ONLY=1 时只发停止/失能命令。
+# CAN 测试构建变体：
+#   APP_CAN_TEST_STOP_ONLY=1     只发停止/失能命令
+#   APP_CAN_TEST_SCAN_ONLY=1     只扫描电机 ID，不驱动
+#   APP_CAN_TEST_CONSERVATIVE=1  指定 ID 的低速、限时、低增益 MIT 保守驱动
 set(APP_CAN_TEST_STOP_ONLY "0" CACHE STRING "Build CAN test as stop-only firmware")
 set(APP_CAN_TEST_SCAN_ONLY "0" CACHE STRING "Build CAN test as scan-only firmware (no drive)")
 set(APP_CAN_TEST_TARGET_ID "0" CACHE STRING "Drive only this motor ID (0 = first detected)")
 set(APP_CAN_TEST_VEL_RAD_S "3.0F" CACHE STRING "CAN test speed target in rad/s")
 set(APP_CAN_TEST_RUN_MS "0" CACHE STRING "CAN test drive duration in ms (0 = run forever)")
+set(APP_CAN_TEST_CONSERVATIVE "0" CACHE STRING "Build CAN test as conservative low-speed timed drive")
+set(APP_CAN_TEST_SAFE_NATIVE_SPEED "0" CACHE STRING "Conservative test uses native speed mode instead of MIT Kd")
+set(APP_CAN_TEST_SAFE_VEL_RAD_S "0.5F" CACHE STRING "Conservative test speed target in rad/s")
+set(APP_CAN_TEST_SAFE_KD "0.5F" CACHE STRING "Conservative MIT velocity damping")
+set(APP_CAN_TEST_SAFE_SETTLE_MS "300" CACHE STRING "Conservative zero-torque settle time in ms")
+set(APP_CAN_TEST_SAFE_RAMP_MS "500" CACHE STRING "Conservative speed ramp time in ms")
+set(APP_CAN_TEST_SAFE_HOLD_MS "1000" CACHE STRING "Conservative hold time in ms")
+set(APP_CAN_TEST_SAFE_TIMEOUT_MS "3000" CACHE STRING "Conservative hard timeout in ms")
+set(APP_CAN_TEST_SAFE_START_FB_TIMEOUT_MS "2000" CACHE STRING "Wait-for-first-feedback timeout in ms")
+set(APP_CAN_TEST_SAFE_FB_TIMEOUT_MS "200" CACHE STRING "Feedback watchdog timeout in ms")
+set(APP_CAN_TEST_SAFE_POS_LIMIT_RAD "1.0F" CACHE STRING "Conservative position change limit in rad")
 target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
     ROBOT_TARGET=${ROBOT_TARGET_DEF}
     APP_CAN_TEST_STOP_ONLY=${APP_CAN_TEST_STOP_ONLY}
@@ -79,6 +93,17 @@ target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
     APP_CAN_TEST_TARGET_ID=${APP_CAN_TEST_TARGET_ID}
     APP_CAN_TEST_VEL_RAD_S=${APP_CAN_TEST_VEL_RAD_S}
     APP_CAN_TEST_RUN_MS=${APP_CAN_TEST_RUN_MS}
+    APP_CAN_TEST_CONSERVATIVE=${APP_CAN_TEST_CONSERVATIVE}
+    APP_CAN_TEST_SAFE_NATIVE_SPEED=${APP_CAN_TEST_SAFE_NATIVE_SPEED}
+    APP_CAN_TEST_SAFE_VEL_RAD_S=${APP_CAN_TEST_SAFE_VEL_RAD_S}
+    APP_CAN_TEST_SAFE_KD=${APP_CAN_TEST_SAFE_KD}
+    APP_CAN_TEST_SAFE_SETTLE_MS=${APP_CAN_TEST_SAFE_SETTLE_MS}
+    APP_CAN_TEST_SAFE_RAMP_MS=${APP_CAN_TEST_SAFE_RAMP_MS}
+    APP_CAN_TEST_SAFE_HOLD_MS=${APP_CAN_TEST_SAFE_HOLD_MS}
+    APP_CAN_TEST_SAFE_TIMEOUT_MS=${APP_CAN_TEST_SAFE_TIMEOUT_MS}
+    APP_CAN_TEST_SAFE_START_FB_TIMEOUT_MS=${APP_CAN_TEST_SAFE_START_FB_TIMEOUT_MS}
+    APP_CAN_TEST_SAFE_FB_TIMEOUT_MS=${APP_CAN_TEST_SAFE_FB_TIMEOUT_MS}
+    APP_CAN_TEST_SAFE_POS_LIMIT_RAD=${APP_CAN_TEST_SAFE_POS_LIMIT_RAD}
 )
 
 # Add STM32CubeMX generated sources
