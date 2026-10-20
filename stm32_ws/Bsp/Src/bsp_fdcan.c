@@ -22,6 +22,18 @@
 
 #include <stddef.h>
 
+/**
+ * @brief TX FIFO 满时的最大等待时间，单位 ms。
+ *
+ * 四轮台架会在一个循环里连续发送十几帧，而 FDCAN TX FIFO 只有 8 个元素。
+ * 直接调用 HAL_FDCAN_AddMessageToTxFifoQ() 会在 FIFO 满时返回 HAL_BUSY，
+ * 上层若忽略返回值就会静默丢帧。这里做有界等待/重试，保证控制帧入队。
+ */
+#define BSP_FDCAN_TX_TIMEOUT_MS 10U
+
+volatile uint32_t g_bsp_fdcan_tx_wait_count;      /**< TX FIFO 满导致的等待次数。 */
+volatile uint32_t g_bsp_fdcan_tx_timeout_count;   /**< TX FIFO 等待超时次数。 */
+
 /* ==========================================================================
  * 依赖与私有配置
  * --------------------------------------------------------------------------
@@ -465,7 +477,29 @@ HAL_StatusTypeDef bsp_fdcan_send_std(FDCAN_HandleTypeDef *hfdcan,
 
     tx_data = (data != NULL) ? (uint8_t *)data : &empty_data;
 
-    return HAL_FDCAN_AddMessageToTxFifoQ(hfdcan, &tx_header, tx_data);
+    {
+        uint32_t start_tick = HAL_GetTick();
+        HAL_StatusTypeDef status;
+
+        for (;;) {
+            if (HAL_FDCAN_GetTxFifoFreeLevel(hfdcan) > 0U) {
+                status = HAL_FDCAN_AddMessageToTxFifoQ(hfdcan, &tx_header, tx_data);
+                if (status == HAL_OK) {
+                    return HAL_OK;
+                }
+                if (status != HAL_BUSY) {
+                    return status;
+                }
+            } else {
+                g_bsp_fdcan_tx_wait_count++;
+            }
+
+            if ((uint32_t)(HAL_GetTick() - start_tick) >= BSP_FDCAN_TX_TIMEOUT_MS) {
+                g_bsp_fdcan_tx_timeout_count++;
+                return HAL_TIMEOUT;
+            }
+        }
+    }
 }
 
 uint8_t bsp_fdcan_dlc_to_length(uint32_t dlc)
