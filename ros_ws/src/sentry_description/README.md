@@ -19,7 +19,8 @@ ros2 launch sentry_description description.launch.py use_rviz:=true chassis_mode
 
 ## 当前训练车：静态麦轮模型
 
-`urdf/mecanum_static.urdf`，全部为 fixed joint，只用于 TF、RViz 和静态几何：
+`urdf/mecanum_static.urdf`：四个轮子为 `continuous`（由 USB 桥的
+`serial/joint_states_raw` 驱动），`base_link`、`gimbal_yaw`、`imu_link` 为 fixed：
 
 | 项 | 值 |
 |---|---:|
@@ -37,6 +38,7 @@ TF 链：
 
 ```text
 base_footprint -> base_link -> gimbal_yaw -> front_mid360
+base_footprint -> base_link -> imu_link
 base_footprint -> wheel_front_left / wheel_front_right / wheel_back_left / wheel_back_right
 ```
 

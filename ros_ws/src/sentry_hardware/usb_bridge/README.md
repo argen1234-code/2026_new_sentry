@@ -5,13 +5,21 @@ Jetson ↔ STM32H723 USB CDC 桥接节点。
 ## 链路
 
 ```text
-/usb_bridge/state  <- MCU_STATE (0x81, 50 Hz)  <- STM32 USB CDC (0483:5740)
-/unified_cmd       -> UNIFIED_CMD (0x10, 50 Hz) -> STM32 USB CDC
+/usb_bridge/state       <- MCU_STATE    (0x81, 50 Hz)
+/chassis/state          <- WHEEL_STATE  (0x83, 50 Hz)
+/imu/data               <- IMU_STATE    (0x84, 50 Hz)
+/serial/joint_states_raw<- JointState   (由 0x83 生成，joint_state_publisher 合并)
+/diagnostics            <- 1 Hz
+/unified_cmd            -> UNIFIED_CMD  (0x10, 50 Hz)
 ```
 
 节点启动后自动按 `VID:PID = 0483:5740` 查找 STM32，不会误开 DAPLink 的 CDC
-或雷达串口。没有新命令或命令超过 `command_timeout` 时，发送零命令；STM32
-侧 500 ms 收不到主机帧会自动清除命令有效位。
+或雷达串口。没有新命令或命令超过 `command_timeout` 时发送零命令；STM32 侧
+500 ms 收不到主机帧会清除命令有效位，底盘 App 会 force_stop。
+
+`cmd_vel_to_unified` 是可选节点：订阅 `/cmd_vel`，转换成 `UnifiedCmd`。
+默认 `enable_motion=false`，只有显式开启并带 `chassis_status` 的
+`CMD_VALID | CMD_MOTION_ENABLE` 位时，MCU 才接受底盘速度。
 
 ## 帧格式
 
@@ -20,14 +28,56 @@ AA 55 | id | seq | len | payload[len] | xor
 xor = id ^ seq ^ len ^ payload[0] ^ ... ^ payload[len-1]
 ```
 
-| ID | 方向 | 内容 |
-|---|---|---|
-| `0x01` | Jetson → MCU | 主机心跳：`mode u8, flags u8` |
-| `0x10` | Jetson → MCU | `UnifiedCmd`，45 字节小端 |
-| `0x81` | MCU → Jetson | 机器人状态，40 字节小端 |
-| `0x82` | MCU → Jetson | MCU 心跳，8 字节小端 |
+| ID | 方向 | 内容 | 长度 |
+|---|---|---|---:|
+| `0x01` | Jetson → MCU | 主机心跳：`mode u8, flags u8` | 2 |
+| `0x10` | Jetson → MCU | `UnifiedCmd` | 45 |
+| `0x81` | MCU → Jetson | 兼容机器人状态 | 40 |
+| `0x82` | MCU → Jetson | MCU 心跳 | 8 |
+| `0x83` | MCU → Jetson | 四轮动态状态 | 58 |
+| `0x84` | MCU → Jetson | IMU 动态状态 | 58 |
 
-`UnifiedCmd` 布局：
+### `0x83 WheelState`（58 B）
+
+```text
+u32 mcu_ts_ms
+u8  online_mask           # bit0..3 = RR, FL, RL, FR
+u8  mode                  # ChassisMode
+u16 chassis_status        # ChassisStatus
+u16 fault_flags           # bit0..7 见下，bit8..11 = dm_fault_mask
+f32 speed_mps[4]          # RR, FL, RL, FR
+f32 position_rad[4]       # 电机侧 rad，直驱 1:1
+u8  temp_mos_c[4]
+u8  temp_motor_c[4]
+i16 torque_mnm[4]         # 0.001 N*m
+```
+
+`fault_flags`：
+
+- bit0 `dm_fault_latched`
+- bit1 `dm_mode_fail_count > 0`
+- bit2 `dm_tx_drop_count > 0`
+- bit3 `imu_status != IMU_OK`
+- bit4 `send_enable == 0`
+- bit5 `online_mask != 0x0F`
+- bit6 最近出现过周期 overrun
+- bit7 `chassis_status != ChassisOk`
+
+### `0x84 ImuState`（58 B）
+
+```text
+u32 mcu_ts_ms
+f32 gyro[3]               # rad/s
+f32 accel[3]              # m/s^2
+f32 temperature_c
+f32 quat_wxyz[4]          # valid_mask bit1 为 0 时无效
+i32 imu_status
+u8  valid_mask            # bit0 gyro+accel, bit1 attitude, bit2 temperature
+u8  reserved
+u32 last_ok_ms
+```
+
+### `UnifiedCmd`（45 B）
 
 ```text
 i32 delta_yaw_udeg
@@ -37,30 +87,12 @@ i32 vx_mm_s
 i32 vy_mm_s
 i32 wz_mdeg_s
 i32 chassis_mode
-u16 chassis_status
+u16 chassis_status        # bit0 CMD_VALID, bit1 CMD_MOTION_ENABLE
 u8  fire_on
 i32 fire_mode
 i32 burst_count
 u64 host_ts_ns
 ```
-
-MCU 状态布局：
-
-```text
-u32 mcu_ts_ms
-f32 imu_roll, imu_pitch, imu_yaw
-f32 gimbal_yaw, gimbal_pitch
-f32 vx, vy, wz
-u8  mode, status
-u16 error_flags
-```
-
-协议实现：
-
-- Jetson：[`usb_bridge/protocol.py`](usb_bridge/protocol.py)
-- STM32：[`stm32_ws/Component/Communication/Src/communication_usb.c`](../../../../stm32_ws/Component/Communication/Src/communication_usb.c)
-
-修改字段时必须两边同时改，并保持 45 / 40 字节长度不变。
 
 ## 运行
 
@@ -70,28 +102,27 @@ source /opt/ros/jazzy/setup.bash
 colcon build --symlink-install --packages-up-to usb_bridge
 source install/setup.bash
 
-ros2 launch usb_bridge usb_bridge.launch.py
+# 只读状态
+ros2 launch usb_bridge usb_bridge.launch.py enable_motion:=false
+
+# 允许 /cmd_vel 驱动底盘（先架空车轮）
+ros2 launch usb_bridge usb_bridge.launch.py enable_motion:=true
 ```
 
 检查：
 
 ```bash
 ros2 topic echo /usb_bridge/state
-ros2 topic info /unified_cmd
+ros2 topic echo /chassis/state
+ros2 topic echo /imu/data
+ros2 topic echo /joint_states
+ros2 topic echo /diagnostics
 ```
-
-## 稳定设备名（可选）
-
-```bash
-sudo cp udev/99-sentry-stm32.rules /etc/udev/rules.d/
-sudo udevadm control --reload-rules
-sudo udevadm trigger
-```
-
-之后可使用 `/dev/sentry_stm32`，并把 `port` 参数设为该路径。
 
 ## 安全约定
 
-- 本节点只做桥接，不直接产生电机输出。
-- STM32 侧只缓存命令，当前 target 的控制 App 尚未消费该命令。
-- 后续接入控制链路时，必须在 App 层做超时、模式合法性检查和输出钳位。
+- `enable_motion` 默认 false；MCU 还要求 `chassis_status` 同时带 VALID 和
+  MOTION_ENABLE，并检查 100 ms 命令新鲜度。
+- 命令超时、链路断开、模式非法时，MCU 锁定 `usb_armed` 并 force_stop。
+- `/cmd_vel` 已钳位到 0.45 m/s / 0.3 m/s / 1.0 rad/s，参数可调。
+- 本节点仍可在 `enable_motion:=false` 下作为纯状态桥使用。

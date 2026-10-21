@@ -8,3 +8,7 @@ usb_bridge:
     tx_period: 0.02
     poll_period: 0.005
     link_timeout: 1.0
+    # Dynamic wheel state: MCU order RR, FL, RL, FR.
+    wheel_radius: 0.045
+    wheel_position_wrap_rad: 25.0
+    wheel_joint_signs: [-1.0, 1.0, 1.0, -1.0]

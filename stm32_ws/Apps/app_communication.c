@@ -17,11 +17,13 @@
 
 #include "app_communication.h"
 
+#include "app_chassis.h"
 #include "app_communication_config.h"
 #include "app_gimbal.h"
 #include "app_observe.h"
 #include "bsp_timebase.h"
 #include "communication_usb.h"
+#include "imu.h"
 #include "debug.h"
 #include "main.h"
 #include "cmsis_os.h"
@@ -70,8 +72,14 @@ static uint32_t app_comm_last_probe_seq;
 static uint32_t app_comm_last_ack_seq;
 
 #if ROBOT_APP_ENABLE_USB_BRIDGE != 0U
-/** @brief 最近一次 USB 状态发送时间，单位 us。 */
+/** @brief 最近一次 USB 兼容状态帧发送时间，单位 us。 */
 static uint32_t app_comm_last_usb_us;
+
+/** @brief 最近一次 USB 四轮状态帧发送时间，单位 us。 */
+static uint32_t app_comm_last_usb_wheel_us;
+
+/** @brief 最近一次 USB IMU 状态帧发送时间，单位 us。 */
+static uint32_t app_comm_last_usb_imu_us;
 
 /** @brief 最近一次 USB 心跳发送时间，单位 us。 */
 static uint32_t app_comm_last_usb_hb_us;
@@ -242,6 +250,173 @@ static void app_comm_send_gimbal_state(uint32_t now_us)
 
 #if ROBOT_APP_ENABLE_USB_BRIDGE != 0U
 /**
+ * @brief 汇总底盘故障位，供 0x81/0x83 共用。
+ *
+ * @return 16 位故障位。
+ */
+static uint16_t app_comm_chassis_fault_flags(void)
+{
+    uint16_t flags = 0U;
+
+#if ROBOT_APP_ENABLE_CHASSIS != 0U
+    static AppChassisDiag diag;
+
+    if (app_chassis_get_diag(&diag) == 0U) {
+        return 0U;
+    }
+
+    if (diag.dm_fault_latched != 0U) {
+        flags |= 0x0001U;
+    }
+    if (diag.dm_mode_fail_count != 0U) {
+        flags |= 0x0002U;
+    }
+    if (diag.dm_tx_drop_count != 0U) {
+        flags |= 0x0004U;
+    }
+    if (diag.imu_status != (int32_t)IMU_OK) {
+        flags |= 0x0008U;
+    }
+    if (diag.send_enable == 0U) {
+        flags |= 0x0010U;
+    }
+    if (diag.drive_online_mask != 0x0FU) {
+        flags |= 0x0020U;
+    }
+    {
+        static uint32_t last_overrun;
+        static uint8_t overrun_init;
+
+        if (overrun_init == 0U) {
+            last_overrun = diag.cycle_overrun_count;
+            overrun_init = 1U;
+        } else if (diag.cycle_overrun_count != last_overrun) {
+            flags |= 0x0040U;
+            last_overrun = diag.cycle_overrun_count;
+        }
+    }
+    if (diag.chassis_status != ChassisOk) {
+        flags |= 0x0080U;
+    }
+    flags |= (uint16_t)((uint16_t)(diag.dm_fault_mask & 0x0FU) << 8);
+#else
+    (void)flags;
+#endif
+
+    return flags;
+}
+
+/**
+ * @brief 发送四轮动态状态帧（0x83）。
+ *
+ * @param now_us 当前时间戳低 32 位，单位 us。
+ */
+static void app_comm_send_usb_wheel(uint32_t now_us)
+{
+#if ROBOT_APP_ENABLE_CHASSIS != 0U
+    static AppChassisDiag diag;
+    CommunicationUsbWheelState state;
+    uint32_t i;
+
+    if ((app_chassis_get_diag(&diag) == 0U) || (diag.loop_count == 0U)) {
+        return;
+    }
+
+    (void)memset(&state, 0, sizeof(state));
+    state.mcu_ts_ms = (uint32_t)(now_us / 1000U);
+    state.online_mask = diag.drive_online_mask;
+    state.mode = (uint8_t)diag.mode;
+    state.chassis_status = (uint16_t)diag.chassis_status;
+    state.fault_flags = app_comm_chassis_fault_flags();
+
+    for (i = 0U; i < 4U; i++) {
+        float torque_mnm = diag.drive_torque_nm[i] * 1000.0F;
+
+        if (torque_mnm > 32767.0F) {
+            torque_mnm = 32767.0F;
+        } else if (torque_mnm < -32768.0F) {
+            torque_mnm = -32768.0F;
+        }
+
+        state.speed_mps[i] = diag.drive_speed_fb[i];
+        state.position_rad[i] = diag.drive_position_rad[i];
+        state.temp_mos_c[i] = diag.drive_temp_mos[i];
+        state.temp_motor_c[i] = diag.drive_temp_motor[i];
+        state.torque_mnm[i] = (int16_t)torque_mnm;
+    }
+
+    communication_usb_send_wheel_state(&state);
+#else
+    (void)now_us;
+#endif
+}
+
+/**
+ * @brief 发送 IMU 动态状态帧（0x84）。
+ *
+ * @param now_us 当前时间戳低 32 位，单位 us。
+ */
+static void app_comm_send_usb_imu(uint32_t now_us)
+{
+    CommunicationUsbImuState state;
+    imu_health_t health;
+
+    (void)memset(&state, 0, sizeof(state));
+    state.mcu_ts_ms = (uint32_t)(now_us / 1000U);
+    state.quat_wxyz[0] = 1.0F;
+    state.imu_status = (int32_t)IMU_ERR_NOT_READY;
+
+    (void)imu_get_health(&health);
+    state.last_ok_ms = health.last_ok_ms;
+
+#if ROBOT_APP_ENABLE_OBSERVE != 0U
+    {
+        ObserverState observer;
+
+        if ((app_observe_get_state(&observer) != 0U) &&
+            (observer.ins.valid != 0U)) {
+            state.gyro[0] = observer.ins.gyro.x;
+            state.gyro[1] = observer.ins.gyro.y;
+            state.gyro[2] = observer.ins.gyro.z;
+            state.accel[0] = observer.ins.accel.x;
+            state.accel[1] = observer.ins.accel.y;
+            state.accel[2] = observer.ins.accel.z;
+            state.temperature_c = observer.ins.temperature;
+            state.quat_wxyz[0] = observer.ins.quat.w;
+            state.quat_wxyz[1] = observer.ins.quat.x;
+            state.quat_wxyz[2] = observer.ins.quat.y;
+            state.quat_wxyz[3] = observer.ins.quat.z;
+            state.valid_mask = 0x01U | 0x04U;
+            if (observer.ins.ready != 0U) {
+                state.valid_mask |= 0x02U;
+            }
+            state.imu_status = (int32_t)health.last_status;
+        }
+    }
+#elif ROBOT_APP_ENABLE_CHASSIS != 0U
+    {
+        static AppChassisDiag diag;
+
+        if ((app_chassis_get_diag(&diag) != 0U) && (diag.loop_count != 0U)) {
+            state.gyro[0] = diag.imu_gyro[0];
+            state.gyro[1] = diag.imu_gyro[1];
+            state.gyro[2] = diag.imu_gyro[2];
+            state.accel[0] = diag.imu_accel[0];
+            state.accel[1] = diag.imu_accel[1];
+            state.accel[2] = diag.imu_accel[2];
+            state.temperature_c = diag.imu_temperature;
+            state.valid_mask = 0x01U | 0x04U;
+            state.imu_status = diag.imu_status;
+        }
+    }
+#else
+    (void)now_us;
+#endif
+
+    communication_usb_send_imu_state(&state);
+}
+
+/**
  * @brief 把当前机器人状态封装成 USB 桥接帧并发送。
  *
  * @param now_us 当前时间戳低 32 位，单位 us。
@@ -249,38 +424,49 @@ static void app_comm_send_gimbal_state(uint32_t now_us)
 static void app_comm_send_usb_state(uint32_t now_us)
 {
     CommunicationUsbState state;
-    GimbalInput input;
-    ObserverState observer;
     uint32_t now_ms = (uint32_t)(now_us / 1000U);
 
     (void)memset(&state, 0, sizeof(state));
     state.mcu_ts_ms = now_ms;
     state.mode = 3U;
+    state.error_flags = app_comm_chassis_fault_flags();
 
-    if (app_gimbal_get_input(&input) != 0U) {
-        state.imu_yaw = input.ins_yaw;
-        state.imu_pitch = input.ins_pitch;
-        state.gimbal_yaw = input.ins_yaw;
-        state.gimbal_pitch = input.ins_pitch;
-        state.wz = input.gyro_z;
-        state.status |= 0x04U;
-        if (input.ins_ready != 0U) {
-            state.status |= 0x02U;
+#if ROBOT_APP_ENABLE_GIMBAL != 0U
+    {
+        GimbalInput input;
+
+        if (app_gimbal_get_input(&input) != 0U) {
+            state.imu_yaw = input.ins_yaw;
+            state.imu_pitch = input.ins_pitch;
+            state.gimbal_yaw = input.ins_yaw;
+            state.gimbal_pitch = input.ins_pitch;
+            state.wz = input.gyro_z;
+            state.status |= 0x04U;
+            if (input.ins_ready != 0U) {
+                state.status |= 0x02U;
+            }
         }
     }
+#endif
 
-    if (app_observe_get_state(&observer) != 0U) {
-        state.imu_roll = observer.ins.euler.roll;
-        state.imu_pitch = observer.ins.euler.pitch;
-        state.imu_yaw = observer.ins.euler.yaw;
-        state.vx = observer.chassis.vel.x;
-        state.vy = observer.chassis.vel.y;
-        if (observer.ins.ready != 0U) {
-            state.status |= 0x02U;
+#if ROBOT_APP_ENABLE_OBSERVE != 0U
+    {
+        ObserverState observer;
+
+        if (app_observe_get_state(&observer) != 0U) {
+            state.imu_roll = observer.ins.euler.roll;
+            state.imu_pitch = observer.ins.euler.pitch;
+            state.imu_yaw = observer.ins.euler.yaw;
+            state.vx = observer.chassis.vel.x;
+            state.vy = observer.chassis.vel.y;
+            if (observer.ins.ready != 0U) {
+                state.status |= 0x02U;
+            }
         }
     }
+#endif
 
-    if (communication_usb_link_online(now_ms) != 0U) {
+    if (communication_usb_link_online(HAL_GetTick()) != 0U) {
         state.status |= 0x01U;
     }
 
@@ -392,11 +578,17 @@ static void app_comm_entry(void *argument)
     uint32_t last_debug_us = 0U;
     uint32_t last_profiler_us = 0U;
     uint32_t primask;
+#if ROBOT_APP_ENABLE_USB_BRIDGE != 0U
+    uint8_t usb_frame_sent;
+#endif
 
     (void)argument;
 
     while (1) {
         now_us = (uint32_t)bsp_timebase_now_us();
+#if ROBOT_APP_ENABLE_USB_BRIDGE != 0U
+        usb_frame_sent = 0U;
+#endif
 
         app_comm_poll_aim();
         app_comm_handle_probe(now_us);
@@ -407,21 +599,42 @@ static void app_comm_entry(void *argument)
         }
 
 #if ROBOT_APP_ENABLE_USB_BRIDGE != 0U
-        communication_usb_poll((uint32_t)(now_us / 1000U));
+        /* 命令新鲜度使用 HAL tick，和 app_chassis 的时间域一致。 */
+        communication_usb_poll(HAL_GetTick());
+
+        /* CDC 没有 TX 队列：每 5 ms tick 只发一帧，按优先级轮转。 */
+#if ROBOT_APP_ENABLE_CHASSIS != 0U
+        if (app_comm_due(now_us, &app_comm_last_usb_wheel_us, APP_COMM_USB_PERIOD_MS) != 0U) {
+            app_comm_send_usb_wheel(now_us);
+            usb_frame_sent = 1U;
+        } else
+#endif
+#if (ROBOT_APP_ENABLE_OBSERVE != 0U) || (ROBOT_APP_ENABLE_CHASSIS != 0U)
+        if (app_comm_due(now_us, &app_comm_last_usb_imu_us, APP_COMM_USB_PERIOD_MS) != 0U) {
+            app_comm_send_usb_imu(now_us);
+            usb_frame_sent = 1U;
+        } else
+#endif
         if (app_comm_due(now_us, &app_comm_last_usb_us, APP_COMM_USB_PERIOD_MS) != 0U) {
             app_comm_send_usb_state(now_us);
-        }
-        if (app_comm_due(now_us, &app_comm_last_usb_hb_us, APP_COMM_USB_HEARTBEAT_MS) != 0U) {
-            uint32_t now_ms = (uint32_t)(now_us / 1000U);
+            usb_frame_sent = 1U;
+        } else if (app_comm_due(now_us, &app_comm_last_usb_hb_us, APP_COMM_USB_HEARTBEAT_MS) != 0U) {
+            uint32_t now_tick = HAL_GetTick();
             communication_usb_send_heartbeat(
-                now_ms,
+                now_tick,
                 3U,
-                (communication_usb_link_online(now_ms) != 0U) ? 0x01U : 0x00U);
+                (communication_usb_link_online(now_tick) != 0U) ? 0x01U : 0x00U);
+            usb_frame_sent = 1U;
         }
 #endif
 
 #if APP_COMM_DEBUG_FLUSH_ENABLE != 0U
+#if ROBOT_APP_ENABLE_USB_BRIDGE != 0U
+        if ((usb_frame_sent == 0U) &&
+            (app_comm_due(now_us, &last_debug_us, APP_COMM_DEBUG_PERIOD_MS) != 0U)) {
+#else
         if (app_comm_due(now_us, &last_debug_us, APP_COMM_DEBUG_PERIOD_MS) != 0U) {
+#endif
             (void)app_communication_flush_debug();
         }
 #else
@@ -461,6 +674,8 @@ uint8_t app_communication_init(void)
 
 #if ROBOT_APP_ENABLE_USB_BRIDGE != 0U
     app_comm_last_usb_us = 0U;
+    app_comm_last_usb_wheel_us = 0U;
+    app_comm_last_usb_imu_us = 0U;
     app_comm_last_usb_hb_us = 0U;
     communication_usb_init();
 #endif

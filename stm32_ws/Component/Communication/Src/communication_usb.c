@@ -395,6 +395,61 @@ void communication_usb_send_state(const CommunicationUsbState *state)
                                  (uint8_t)COMMUNICATION_USB_MCU_STATE_LEN);
 }
 
+void communication_usb_send_wheel_state(const CommunicationUsbWheelState *state)
+{
+    uint8_t payload[COMMUNICATION_USB_WHEEL_STATE_LEN];
+    uint32_t i;
+
+    if (state == NULL) {
+        return;
+    }
+
+    communication_usb_put_u32(&payload[0], state->mcu_ts_ms);
+    payload[4] = state->online_mask;
+    payload[5] = state->mode;
+    communication_usb_put_u16(&payload[6], state->chassis_status);
+    communication_usb_put_u16(&payload[8], state->fault_flags);
+    for (i = 0U; i < 4U; i++) {
+        communication_usb_put_f32(&payload[10U + (4U * i)], state->speed_mps[i]);
+        communication_usb_put_f32(&payload[26U + (4U * i)], state->position_rad[i]);
+        payload[42U + i] = state->temp_mos_c[i];
+        payload[46U + i] = state->temp_motor_c[i];
+        communication_usb_put_u16(&payload[50U + (2U * i)], (uint16_t)state->torque_mnm[i]);
+    }
+
+    communication_usb_send_frame(COMMUNICATION_USB_ID_WHEEL_STATE,
+                                 payload,
+                                 (uint8_t)COMMUNICATION_USB_WHEEL_STATE_LEN);
+}
+
+void communication_usb_send_imu_state(const CommunicationUsbImuState *state)
+{
+    uint8_t payload[COMMUNICATION_USB_IMU_STATE_LEN];
+    uint32_t i;
+
+    if (state == NULL) {
+        return;
+    }
+
+    communication_usb_put_u32(&payload[0], state->mcu_ts_ms);
+    for (i = 0U; i < 3U; i++) {
+        communication_usb_put_f32(&payload[4U + (4U * i)], state->gyro[i]);
+        communication_usb_put_f32(&payload[16U + (4U * i)], state->accel[i]);
+    }
+    communication_usb_put_f32(&payload[28], state->temperature_c);
+    for (i = 0U; i < 4U; i++) {
+        communication_usb_put_f32(&payload[32U + (4U * i)], state->quat_wxyz[i]);
+    }
+    communication_usb_put_i32(&payload[48], state->imu_status);
+    payload[52] = state->valid_mask;
+    payload[53] = state->reserved;
+    communication_usb_put_u32(&payload[54], state->last_ok_ms);
+
+    communication_usb_send_frame(COMMUNICATION_USB_ID_IMU_STATE,
+                                 payload,
+                                 (uint8_t)COMMUNICATION_USB_IMU_STATE_LEN);
+}
+
 void communication_usb_send_heartbeat(uint32_t now_ms, uint8_t mode, uint8_t status)
 {
     uint8_t payload[COMMUNICATION_USB_MCU_HEARTBEAT_LEN];

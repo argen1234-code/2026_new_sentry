@@ -20,11 +20,13 @@
 #include "app_gimbal.h"
 #include "app_input.h"
 #include "app_observe.h"
+#include "communication_usb.h"
 #if ROBOT_APP_ENABLE_CALIBRATION != 0U
 #include "app_calibration.h"
 #endif
 #include "bsp_timebase.h"
 #include "debug.h"
+#include "imu.h"
 #include "main.h"
 #include "cmsis_os.h"
 #include "cmsis_os2.h"
@@ -108,6 +110,31 @@ static volatile uint32_t app_chassis_overrun_count;
 
 /** @brief 外部急停标志。 */
 static volatile uint8_t app_chassis_emergency;
+
+/** @brief USB 控制指令是否已经真正接管底盘。 */
+static uint8_t app_chassis_usb_armed;
+
+/**
+ * @brief 把 USB 的 chassis_mode 映射到 ChassisMode。
+ *
+ * @param mode USB 命令中的模式值。
+ * @return 底盘模式，未知值按停止处理。
+ */
+static ChassisMode app_chassis_usb_mode(int32_t mode)
+{
+    if (mode == (int32_t)ChassisModeNoFollow) {
+        return ChassisModeNoFollow;
+    }
+    return ChassisModeStop;
+}
+
+#if ROBOT_APP_ENABLE_OBSERVE == 0U
+/** @brief 轻量 IMU 采样缓存，供未启动 Observe 的 target 使用。 */
+static imu_sample_t app_chassis_imu_sample;
+
+/** @brief 最近一次 IMU 读取状态。 */
+static imu_status_t app_chassis_imu_status = IMU_ERR_NOT_READY;
+#endif
 
 #if defined(APP_CHASSIS_BENCH_TEST) && (APP_CHASSIS_BENCH_TEST != 0U)
 /** @brief 台架注入起始时间，单位 ms。 */
@@ -355,8 +382,16 @@ static void app_chassis_make_cfg(ChassisCfg *cfg)
     cfg->mecanum_center = ROBOT_CHASSIS_CENTER_DIST;
     cfg->omni_center = ROBOT_CHASSIS_CENTER_DIST;
     cfg->wz_scale = ROBOT_CHASSIS_WZ_SET_SCALE;
+#if defined(ROBOT_CHASSIS_TRANSLATION_SLEW)
     cfg->translation_slew = ROBOT_CHASSIS_TRANSLATION_SLEW;
+#else
+    cfg->translation_slew = 0.0F;
+#endif
+#if defined(ROBOT_CHASSIS_ROTATION_SLEW)
     cfg->rotation_slew = ROBOT_CHASSIS_ROTATION_SLEW;
+#else
+    cfg->rotation_slew = 0.0F;
+#endif
     cfg->half_length = ROBOT_CHASSIS_HALF_LENGTH;
     cfg->half_width = ROBOT_CHASSIS_HALF_WIDTH;
     cfg->steer_zero[0] = ROBOT_CHASSIS_STEER_ZERO_0;
@@ -475,6 +510,11 @@ static motor_status_t app_chassis_drive_fb(uint32_t now_ms, uint32_t index, Chas
 
         /* DM 反馈是电机正方向下的 rad/s，换算成底盘 m/s；符号已包含在运动学里。 */
         out->speed = fb.fb.vel * ROBOT_CHASSIS_WHEEL_RADIUS_M * ROBOT_CHASSIS_DM_GEAR_RATIO;
+        out->angle = fb.fb.pos;
+        out->torque = fb.fb.tor;
+        out->temp_mos = (uint8_t)fb.fb.t_mos;
+        out->temp_motor = (uint8_t)fb.fb.t_motor;
+        out->state = fb.fb.state;
         out->speed_rpm = 0;
         out->current = 0;
         out->online = 1U;
@@ -534,6 +574,38 @@ static void app_chassis_fill_cmd(ChassisInput *input)
     if (app_input_get_chassis_cmd(&input->cmd) == 0U) {
         (void)memset(&input->cmd, 0, sizeof(input->cmd));
     }
+
+#if (defined(ROBOT_APP_ENABLE_USB_BRIDGE) && (ROBOT_APP_ENABLE_USB_BRIDGE != 0U)) && \
+    (defined(ROBOT_CHASSIS_USB_CMD_ENABLE) && (ROBOT_CHASSIS_USB_CMD_ENABLE != 0U))
+    {
+        CommunicationUsbCmd usb_cmd;
+
+        if ((communication_usb_get_cmd(&usb_cmd) != 0U) &&
+            ((usb_cmd.chassis_status &
+              (COMMUNICATION_USB_CMD_VALID | COMMUNICATION_USB_CMD_MOTION_ENABLE)) ==
+             (COMMUNICATION_USB_CMD_VALID | COMMUNICATION_USB_CMD_MOTION_ENABLE)) &&
+            ((uint32_t)(HAL_GetTick() - usb_cmd.rx_ms) <= COMMUNICATION_USB_CMD_FRESH_MS) &&
+            ((usb_cmd.chassis_mode == (int32_t)ChassisModeStop) ||
+             (usb_cmd.chassis_mode == (int32_t)ChassisModeNoFollow))) {
+            input->cmd.online = 1U;
+            input->cmd.mode = app_chassis_usb_mode(usb_cmd.chassis_mode);
+            input->cmd.vx = (float32_t)usb_cmd.vx_mm_s / 1000.0F;
+            input->cmd.vy = (float32_t)usb_cmd.vy_mm_s / 1000.0F;
+            input->cmd.wz = (float32_t)usb_cmd.wz_mdeg_s * 0.00001745329252F;
+
+            if ((usb_cmd.vx_mm_s == 0) && (usb_cmd.vy_mm_s == 0) &&
+                (usb_cmd.wz_mdeg_s == 0)) {
+                app_chassis_usb_armed = 0U;
+            } else {
+                app_chassis_usb_armed = 1U;
+                input->cmd.mode = ChassisModeNoFollow;
+            }
+        } else if (app_chassis_usb_armed != 0U) {
+            input->cmd.force_stop = 1U;
+        }
+    }
+#endif
+
 #if APP_CHASSIS_REQUIRE_GIMBAL_READY != 0U
     if (app_gimbal_ready() == 0U) {
         input->cmd.force_stop = 1U;
@@ -641,6 +713,25 @@ static void app_chassis_fill_observe(ChassisInput *input, uint8_t *observe_ready
             *observe_ready = state.ins.ready;
         }
     }
+
+#if ROBOT_APP_ENABLE_OBSERVE == 0U
+    /*
+     * 未启动 Observe 的 target（如 sentry_2026_chassis）直接读取板载 IMU，
+     * 保证底盘侧也能拿到原始角速度和加速度；yaw 仍由 Observer 提供。
+     */
+    app_chassis_imu_status = imu_read();
+    if (app_chassis_imu_status == IMU_OK) {
+        app_chassis_imu_status = imu_sample(&app_chassis_imu_sample);
+    }
+    if (app_chassis_imu_status == IMU_OK) {
+        input->gyro[0] = app_chassis_imu_sample.gyro[0];
+        input->gyro[1] = app_chassis_imu_sample.gyro[1];
+        input->gyro[2] = app_chassis_imu_sample.gyro[2];
+        input->acc[0] = app_chassis_imu_sample.accel[0];
+        input->acc[1] = app_chassis_imu_sample.accel[1];
+        input->acc[2] = app_chassis_imu_sample.accel[2];
+    }
+#endif
 }
 
 /**
@@ -982,6 +1073,11 @@ static void app_chassis_commit(const ChassisInput *input,
         app_chassis_diag.drive_current[i] = output->drive_current[i];
         app_chassis_diag.drive_speed_cmd[i] = output->drive_speed_set[i];
         app_chassis_diag.drive_speed_fb[i] = input->drive_fb[i].speed;
+        app_chassis_diag.drive_position_rad[i] = input->drive_fb[i].angle;
+        app_chassis_diag.drive_torque_nm[i] = input->drive_fb[i].torque;
+        app_chassis_diag.drive_temp_mos[i] = input->drive_fb[i].temp_mos;
+        app_chassis_diag.drive_temp_motor[i] = input->drive_fb[i].temp_motor;
+        app_chassis_diag.drive_motor_state[i] = input->drive_fb[i].state;
     }
 #if defined(ROBOT_CHASSIS_DRIVE_MODE_DM_SPEED)
     app_chassis_diag.dm_fault_latched = app_chassis_dm_fault_latched;
@@ -1016,6 +1112,16 @@ static void app_chassis_commit(const ChassisInput *input,
     app_chassis_diag.drive_online_mask = drive_mask;
     app_chassis_diag.steer_online_mask = steer_mask;
     app_chassis_diag.send_enable = output->send_enable;
+#if ROBOT_APP_ENABLE_OBSERVE == 0U
+    app_chassis_diag.imu_status = (int32_t)app_chassis_imu_status;
+    app_chassis_diag.imu_accel[0] = app_chassis_imu_sample.accel[0];
+    app_chassis_diag.imu_accel[1] = app_chassis_imu_sample.accel[1];
+    app_chassis_diag.imu_accel[2] = app_chassis_imu_sample.accel[2];
+    app_chassis_diag.imu_gyro[0] = app_chassis_imu_sample.gyro[0];
+    app_chassis_diag.imu_gyro[1] = app_chassis_imu_sample.gyro[1];
+    app_chassis_diag.imu_gyro[2] = app_chassis_imu_sample.gyro[2];
+    app_chassis_diag.imu_temperature = app_chassis_imu_sample.temperature;
+#endif
     diag = app_chassis_diag;
     app_chassis_exit(primask);
 
@@ -1435,6 +1541,11 @@ uint8_t app_chassis_init(void)
     app_chassis_heartbeat_ms = HAL_GetTick();
     app_chassis_overrun_count = 0U;
     app_chassis_emergency = 0U;
+    app_chassis_usb_armed = 0U;
+#if ROBOT_APP_ENABLE_OBSERVE == 0U
+    app_chassis_imu_status = IMU_ERR_NOT_READY;
+    (void)memset(&app_chassis_imu_sample, 0, sizeof(app_chassis_imu_sample));
+#endif
 #if defined(ROBOT_CHASSIS_DRIVE_MODE_DM_SPEED)
     app_chassis_dm_ready = 0U;
     app_chassis_dm_fault_since_ms = 0U;

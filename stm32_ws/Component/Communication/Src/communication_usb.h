@@ -36,12 +36,21 @@ extern "C" {
 #define COMMUNICATION_USB_ID_UNIFIED_CMD             0x10U
 #define COMMUNICATION_USB_ID_MCU_STATE               0x81U
 #define COMMUNICATION_USB_ID_MCU_HEARTBEAT           0x82U
+#define COMMUNICATION_USB_ID_WHEEL_STATE             0x83U
+#define COMMUNICATION_USB_ID_IMU_STATE               0x84U
 
 #define COMMUNICATION_USB_UNIFIED_CMD_LEN            45U
 #define COMMUNICATION_USB_MCU_STATE_LEN              40U
 #define COMMUNICATION_USB_MCU_HEARTBEAT_LEN          8U
+#define COMMUNICATION_USB_WHEEL_STATE_LEN            58U
+#define COMMUNICATION_USB_IMU_STATE_LEN              58U
 
 #define COMMUNICATION_USB_HOST_TIMEOUT_MS            500U
+
+/* chassis_status bits in UnifiedCmd */
+#define COMMUNICATION_USB_CMD_VALID                  0x0001U
+#define COMMUNICATION_USB_CMD_MOTION_ENABLE          0x0002U
+#define COMMUNICATION_USB_CMD_FRESH_MS               100U
 
 /* ==========================================================================
  * 命令与状态
@@ -88,6 +97,41 @@ typedef struct
 } CommunicationUsbState;
 
 /**
+ * @brief 四轮底盘动态状态。
+ *
+ * 轮序固定为 RR, FL, RL, FR，与 app_chassis_diag 的 drive_* 数组一致。
+ */
+typedef struct
+{
+    uint32_t mcu_ts_ms;        /**< MCU 时间戳，单位 ms。 */
+    uint8_t online_mask;       /**< 驱动轮在线掩码，bit0..3 = RR, FL, RL, FR。 */
+    uint8_t mode;              /**< ChassisMode 枚举。 */
+    uint16_t chassis_status;   /**< ChassisStatus 枚举。 */
+    uint16_t fault_flags;      /**< 故障位，见实现。 */
+    float speed_mps[4];        /**< 四轮反馈速度，m/s。 */
+    float position_rad[4];     /**< 四轮位置，rad（电机侧，直驱 1:1）。 */
+    uint8_t temp_mos_c[4];     /**< MOS 温度，摄氏度。 */
+    uint8_t temp_motor_c[4];   /**< 电机温度，摄氏度。 */
+    int16_t torque_mnm[4];     /**< 力矩，mN*m。 */
+} CommunicationUsbWheelState;
+
+/**
+ * @brief IMU 动态状态。
+ */
+typedef struct
+{
+    uint32_t mcu_ts_ms;        /**< MCU 时间戳，单位 ms。 */
+    float gyro[3];             /**< 角速度，rad/s。 */
+    float accel[3];            /**< 加速度，m/s^2。 */
+    float temperature_c;       /**< 温度，摄氏度。 */
+    float quat_wxyz[4];        /**< 四元数 w,x,y,z；valid_mask bit1 为 0 时无效。 */
+    int32_t imu_status;        /**< IMU/Observer 状态。 */
+    uint8_t valid_mask;        /**< bit0 gyro+accel，bit1 attitude，bit2 temperature。 */
+    uint8_t reserved;          /**< 保留。 */
+    uint32_t last_ok_ms;       /**< 最近一次有效读取时间，单位 ms。 */
+} CommunicationUsbImuState;
+
+/**
  * @brief 桥接诊断。
  */
 typedef struct
@@ -108,6 +152,8 @@ typedef struct
 void communication_usb_init(void);
 void communication_usb_poll(uint32_t now_ms);
 void communication_usb_send_state(const CommunicationUsbState *state);
+void communication_usb_send_wheel_state(const CommunicationUsbWheelState *state);
+void communication_usb_send_imu_state(const CommunicationUsbImuState *state);
 void communication_usb_send_heartbeat(uint32_t now_ms, uint8_t mode, uint8_t status);
 uint8_t communication_usb_get_cmd(CommunicationUsbCmd *out);
 uint8_t communication_usb_link_online(uint32_t now_ms);

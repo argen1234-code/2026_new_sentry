@@ -71,6 +71,9 @@ extern "C" {
 /** @brief 底盘驱动改用 DM6215 原生速度模式。 */
 #define ROBOT_CHASSIS_DRIVE_MODE_DM_SPEED         1U
 
+/** @brief 允许 USB UnifiedCmd 接管底盘（需要 chassis_status 的 VALID/MOTION_ENABLE 位）。 */
+#define ROBOT_CHASSIS_USB_CMD_ENABLE              1U
+
 /** @brief 四轮全部在线才允许输出；ID3 反馈已用 stop-only 固件确认正常。 */
 #define ROBOT_CHASSIS_MIN_ONLINE_MOTORS           4U
 

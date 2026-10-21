@@ -35,6 +35,9 @@ def generate_launch_description():
             description="Static chassis model: mecanum training car or sentry steering car",
         ),
         include("sentry_hardware", "lidar.launch.py"),
+        include("usb_bridge", "usb_bridge.launch.py", {
+            "enable_motion": "false",
+        }),
         include("sentry_description", "description.launch.py", {
             "use_sim_time": LaunchConfiguration("use_sim_time"),
             "chassis_model": LaunchConfiguration("chassis_model"),

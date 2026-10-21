@@ -69,10 +69,12 @@
                izz="0.0000572"/>
     </inertial>
   </link>
-  <joint name="wheel_front_left_joint" type="fixed">
+  <joint name="wheel_front_left_joint" type="continuous">
     <parent link="base_link"/>
     <child link="wheel_front_left"/>
     <origin xyz="0.1716 0.1362 0" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit effort="10.0" velocity="45.0"/>
   </joint>
 
   <link name="wheel_front_right">
@@ -92,10 +94,12 @@
                izz="0.0000572"/>
     </inertial>
   </link>
-  <joint name="wheel_front_right_joint" type="fixed">
+  <joint name="wheel_front_right_joint" type="continuous">
     <parent link="base_link"/>
     <child link="wheel_front_right"/>
     <origin xyz="0.1716 -0.1362 0" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit effort="10.0" velocity="45.0"/>
   </joint>
 
   <link name="wheel_back_left">
@@ -115,10 +119,12 @@
                izz="0.0000572"/>
     </inertial>
   </link>
-  <joint name="wheel_back_left_joint" type="fixed">
+  <joint name="wheel_back_left_joint" type="continuous">
     <parent link="base_link"/>
     <child link="wheel_back_left"/>
     <origin xyz="-0.1716 0.1362 0" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit effort="10.0" velocity="45.0"/>
   </joint>
 
   <link name="wheel_back_right">
@@ -138,10 +144,20 @@
                izz="0.0000572"/>
     </inertial>
   </link>
-  <joint name="wheel_back_right_joint" type="fixed">
+  <joint name="wheel_back_right_joint" type="continuous">
     <parent link="base_link"/>
     <child link="wheel_back_right"/>
     <origin xyz="-0.1716 -0.1362 0" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit effort="10.0" velocity="45.0"/>
+  </joint>
+
+  <!-- IMU frame: the DM-MC02 IMU mount is not measured yet; keep it at base_link. -->
+  <link name="imu_link"/>
+  <joint name="imu_link_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="imu_link"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
   </joint>
 
   <!-- Compatibility frame: the current car has no gimbal yet, but the Nav2

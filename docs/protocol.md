@@ -103,10 +103,14 @@ Jetson 与 STM32 之间的第一条链路使用 USB CDC，协议事实源：
 | USB VID:PID | `0483:5740` |
 | 设备名 | `Printk DM 02` |
 | 帧格式 | `AA 55 \| id \| seq \| len \| payload \| xor` |
-| 主机命令 | `0x01` 心跳、`0x10` `UnifiedCmd`（45 B） |
-| MCU 上报 | `0x81` 状态（40 B）、`0x82` 心跳（8 B） |
+| 主机命令 | `0x01` 心跳（2 B）、`0x10` `UnifiedCmd`（45 B） |
+| MCU 上报 | `0x81` 兼容状态（40 B）、`0x82` 心跳（8 B）、`0x83` 四轮状态（58 B）、`0x84` IMU 状态（58 B） |
 | 链路超时 | 500 ms 无主机帧则清除命令有效位 |
-| 周期 | 命令 50 Hz，MCU 状态 50 Hz，心跳 10 Hz |
+| 周期 | 命令 50 Hz，`0x81/0x83/0x84` 各 50 Hz，心跳 10 Hz |
+| ROS 话题 | `/usb_bridge/state`、`/chassis/state`、`/imu/data`、`/joint_states`、`/diagnostics` |
+
+轮序固定为 `RR, FL, RL, FR`；`0x10` 的 `chassis_status` bit0 为 `CMD_VALID`，
+bit1 为 `CMD_MOTION_ENABLE`，MCU 还要求命令在 100 ms 内到达。
 
 > 修改字段时必须同时更新 `communication_usb.c`、`protocol.py` 和本文档；
 > 帧长固定，任一方向长度不一致都会导致解析失败。

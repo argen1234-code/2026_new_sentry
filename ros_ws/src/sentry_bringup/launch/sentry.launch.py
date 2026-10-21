@@ -11,6 +11,7 @@ from launch.actions import (
     OpaqueFunction,
     TimerAction,
 )
+from launch.conditions import IfCondition, LaunchConfigurationEquals
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
@@ -94,6 +95,17 @@ def generate_launch_description():
             description="Static chassis model: mecanum training car or sentry steering car",
         ),
         DeclareLaunchArgument(
+            "chassis_transport",
+            default_value="usb",
+            choices=["usb", "udp"],
+            description="Chassis command transport: USB CDC bridge or legacy UDP",
+        ),
+        DeclareLaunchArgument(
+            "enable_motion",
+            default_value="false",
+            description="Allow /cmd_vel to drive the chassis over USB (safety gate)",
+        ),
+        DeclareLaunchArgument(
             "visualization",
             default_value="rviz",
             description="Visualization backend: rviz, foxglove, or headless",
@@ -122,6 +134,9 @@ def generate_launch_description():
             scoped=True,
         ),
         include("sentry_hardware", "lidar.launch.py", {"frame_id": "front_mid360"}),
+        include("usb_bridge", "usb_bridge.launch.py", {
+            "enable_motion": LaunchConfiguration("enable_motion"),
+        }, condition=LaunchConfigurationEquals("chassis_transport", "usb")),
         Node(package="rclcpp_components", executable="component_container_isolated",
              name="nav2_container", output="screen",
              parameters=[configured_params, {"autostart": autostart}]),
@@ -140,8 +155,10 @@ def generate_launch_description():
         # The desktop script starts these three processes three seconds after navigation.
         TimerAction(period=3.0, actions=[
             Node(package="extra_cmd", executable="cmd_vel_to_udp", name="cmd_vel_to_udp",
-                 output="screen", parameters=[{"udp_ip": "0.0.0.0",
-                                               "udp_port": LaunchConfiguration("udp_port")}]),
+                 output="screen", condition=LaunchConfigurationEquals(
+                     "chassis_transport", "udp"),
+                 parameters=[{"udp_ip": "0.0.0.0",
+                              "udp_port": LaunchConfiguration("udp_port")}]),
             Node(package="referee_serial_bridge", executable="referee_serial_bridge_node",
                  name="referee_serial_bridge", output="screen",
                  parameters=[{"device": LaunchConfiguration("referee_device")}]),

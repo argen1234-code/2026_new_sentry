@@ -55,9 +55,18 @@ typedef struct
     uint32_t dm_mode_value[CHASSIS_DRIVE_MAX];   /**< 每轮读回的 CTRL_MODE，0xFFFFFFFF 表示未读到。 */
     float32_t drive_speed_cmd[CHASSIS_DRIVE_MAX];/**< 最近一次驱动速度目标，m/s。 */
     float32_t drive_speed_fb[CHASSIS_DRIVE_MAX]; /**< 最近一次驱动速度反馈，m/s。 */
+    float32_t drive_position_rad[CHASSIS_DRIVE_MAX]; /**< 最近一次驱动位置，rad。 */
+    float32_t drive_torque_nm[CHASSIS_DRIVE_MAX]; /**< 最近一次驱动力矩，N*m。 */
+    uint8_t drive_temp_mos[CHASSIS_DRIVE_MAX];   /**< MOS 温度，摄氏度。 */
+    uint8_t drive_temp_motor[CHASSIS_DRIVE_MAX]; /**< 电机温度，摄氏度。 */
+    uint8_t drive_motor_state[CHASSIS_DRIVE_MAX];/**< 电机状态位。 */
     float32_t drive_speed_fb_min[CHASSIS_DRIVE_MAX]; /**< 运行期间反馈速度最小值，m/s。 */
     float32_t drive_speed_fb_max[CHASSIS_DRIVE_MAX]; /**< 运行期间反馈速度最大值，m/s。 */
     uint32_t drive_offline_count[CHASSIS_DRIVE_MAX]; /**< 每个驱动轮反馈离线周期计数。 */
+    int32_t imu_status;                          /**< 最近一次 IMU 读取状态。 */
+    float32_t imu_accel[3];                      /**< 最近一次 IMU 加速度，单位 m/s^2。 */
+    float32_t imu_gyro[3];                       /**< 最近一次 IMU 角速度，单位 rad/s。 */
+    float32_t imu_temperature;                   /**< 最近一次 IMU 温度，单位摄氏度。 */
     uint32_t drive_first_move_ms[CHASSIS_DRIVE_MAX]; /**< 相对启动，首次 |反馈|>0.01 m/s 的时间。 */
     uint32_t drive_first_full_ms[CHASSIS_DRIVE_MAX]; /**< 相对启动，首次达到目标 80% 的时间。 */
     uint32_t drive_first_enabled_ms[CHASSIS_DRIVE_MAX]; /**< 相对启动，首次反馈 state=1 的时间。 */

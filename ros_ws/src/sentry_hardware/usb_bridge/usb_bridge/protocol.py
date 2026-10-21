@@ -16,20 +16,32 @@ ID_HOST_HEARTBEAT = 0x01
 ID_UNIFIED_CMD = 0x10
 ID_MCU_STATE = 0x81
 ID_MCU_HEARTBEAT = 0x82
+ID_WHEEL_STATE = 0x83
+ID_IMU_STATE = 0x84
 
 # Keep these layouts in sync with
 # stm32_ws/Component/Communication/Src/communication_usb.h.
 UNIFIED_CMD_FMT = '<iiHiiiiHBiiQ'
 MCU_STATE_FMT = '<I8fBBH'
 MCU_HEARTBEAT_FMT = '<IBBH'
+WHEEL_STATE_FMT = '<IBBHH4f4f4B4B4h'
+IMU_STATE_FMT = '<I3f3ff4fiBBI'
 
 UNIFIED_CMD_LEN = struct.calcsize(UNIFIED_CMD_FMT)
 MCU_STATE_LEN = struct.calcsize(MCU_STATE_FMT)
 MCU_HEARTBEAT_LEN = struct.calcsize(MCU_HEARTBEAT_FMT)
+WHEEL_STATE_LEN = struct.calcsize(WHEEL_STATE_FMT)
+IMU_STATE_LEN = struct.calcsize(IMU_STATE_FMT)
 
 assert UNIFIED_CMD_LEN == 45
 assert MCU_STATE_LEN == 40
 assert MCU_HEARTBEAT_LEN == 8
+assert WHEEL_STATE_LEN == 58
+assert IMU_STATE_LEN == 58
+
+# UnifiedCmd chassis_status bits (must match communication_usb.h).
+CMD_VALID = 0x0001
+CMD_MOTION_ENABLE = 0x0002
 
 
 @dataclass(frozen=True)
@@ -114,6 +126,40 @@ def decode_mcu_state(payload):
         'mode': values[9],
         'status': values[10],
         'error_flags': values[11],
+    }
+
+
+def decode_wheel_state(payload):
+    if len(payload) != WHEEL_STATE_LEN:
+        raise ValueError(f'wheel state length {len(payload)} != {WHEEL_STATE_LEN}')
+    values = struct.unpack(WHEEL_STATE_FMT, payload)
+    return {
+        'mcu_ts_ms': values[0],
+        'online_mask': values[1],
+        'mode': values[2],
+        'chassis_status': values[3],
+        'fault_flags': values[4],
+        'speed_mps': list(values[5:9]),
+        'position_rad': list(values[9:13]),
+        'temp_mos_c': list(values[13:17]),
+        'temp_motor_c': list(values[17:21]),
+        'torque_mnm': list(values[21:25]),
+    }
+
+
+def decode_imu_state(payload):
+    if len(payload) != IMU_STATE_LEN:
+        raise ValueError(f'imu state length {len(payload)} != {IMU_STATE_LEN}')
+    values = struct.unpack(IMU_STATE_FMT, payload)
+    return {
+        'mcu_ts_ms': values[0],
+        'gyro': list(values[1:4]),
+        'accel': list(values[4:7]),
+        'temperature_c': values[7],
+        'quat_wxyz': list(values[8:12]),
+        'imu_status': values[12],
+        'valid_mask': values[13],
+        'last_ok_ms': values[15],
     }
 
 

@@ -316,8 +316,12 @@ typedef struct
     uint16_t ecd;       /**< 编码器原始值。 */
     int16_t speed_rpm;  /**< 转速反馈，单位 rpm。 */
     int16_t current;    /**< 电流反馈。 */
-    float32_t angle;    /**< 注入角度，单位 rad，舵向电机优先使用。 */
+    float32_t angle;    /**< 注入角度/位置，单位 rad，舵向电机优先使用。 */
     float32_t speed;    /**< 注入速度，非 0 时优先于 speed_rpm 换算值。 */
+    float32_t torque;   /**< 力矩反馈，单位 N*m。 */
+    uint8_t temp_mos;   /**< MOS 温度，单位摄氏度。 */
+    uint8_t temp_motor; /**< 电机温度，单位摄氏度。 */
+    uint8_t state;      /**< 电机状态位。 */
     uint8_t online;     /**< 非 0 表示反馈在线。 */
 } ChassisMotorFb;
 

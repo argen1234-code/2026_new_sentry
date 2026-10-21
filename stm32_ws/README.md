@@ -148,8 +148,11 @@ Communication
 
 - 帧格式：`AA 55 | id | seq | len | payload | xor`
 - 主机命令：`0x01` 心跳、`0x10` `UnifiedCmd`
-- MCU 上报：`0x81` 状态、`0x82` 心跳
-- 主机 500 ms 无帧时 MCU 自动清除命令有效位
+- MCU 上报：`0x81` 兼容状态、`0x82` 心跳、`0x83` 四轮动态状态、`0x84` IMU 状态
+- 4 相 5 ms 调度，每 tick 只发一帧，避免 CDC TX 丢帧
+- 主机 500 ms 无帧时 MCU 自动清除命令有效位；`sentry_2026_chassis` 由
+  `ROBOT_CHASSIS_USB_CMD_ENABLE` 打开命令消费，并要求 `chassis_status` 的
+  `CMD_VALID|CMD_MOTION_ENABLE` 位和 100 ms 新鲜度
 - USB 枚举为 `0483:5740`（`Printk DM 02`），Jetson 侧按 VID/PID 自动识别
 
 ## CAN1 DMH6215 台架测试
