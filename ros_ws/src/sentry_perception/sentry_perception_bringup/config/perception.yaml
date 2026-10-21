@@ -12,7 +12,7 @@ terrain_analysis:
     scanVoxelSize: 0.05
     decayTime: 0.5
     noDecayDis: 0.0
-    clearingDis: 0.5
+    clearingDis: 0.35
     useSorting: true
     quantileZ: 0.05
     considerDrop: false
@@ -29,11 +29,11 @@ terrain_analysis:
     noDataObstacle: false
     noDataBlockSkipNum: 0
     minBlockPointNum: 10
-    vehicleHeight: 1.0
+    vehicleHeight: 0.8
     voxelPointUpdateThre: 100
     voxelTimeUpdateThre: 1.0
-    minRelZ: -0.6
-    maxRelZ: 0.6
+    minRelZ: -0.35
+    maxRelZ: 0.8
     disRatioZ: 0.2
 
 terrain_analysis_ext:
@@ -41,17 +41,17 @@ terrain_analysis_ext:
     scanVoxelSize: 0.1
     decayTime: 1.0
     noDecayDis: 0.0
-    clearingDis: 0.5
+    clearingDis: 0.35
     useSorting: false
     quantileZ: 0.2
-    vehicleHeight: 1.0
+    vehicleHeight: 0.8
     voxelPointUpdateThre: 100
     voxelTimeUpdateThre: 2.0
-    lowerBoundZ: -1.5
-    upperBoundZ: 0.5
+    lowerBoundZ: -0.6
+    upperBoundZ: 0.8
     disRatioZ: 0.2
     checkTerrainConn: false
-    terrainUnderVehicle: -0.75
+    terrainUnderVehicle: -0.22
     terrainConnThre: 0.5
     ceilingFilteringThre: 2.0
     localTerrainMapRadius: 4.0
@@ -60,14 +60,14 @@ pointcloud_to_laserscan:
   ros__parameters:
     use_sim_time: false
     target_frame: base_footprint
-    min_height: 0.1
-    max_height: 0.6
+    min_height: 0.08
+    max_height: 1.0
     min_intensity: 0.1
     max_intensity: 2.0
     angle_min: -3.1415926
     angle_max: 3.1415926
     angle_increment: 0.00872665
     scan_time: 0.05
-    range_min: 0.43
+    range_min: 0.5
     range_max: 10.0
     use_inf: true
