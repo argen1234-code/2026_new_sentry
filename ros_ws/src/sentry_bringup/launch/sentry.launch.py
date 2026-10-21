@@ -88,6 +88,12 @@ def generate_launch_description():
         DeclareLaunchArgument("use_sim_time", default_value="false"),
         DeclareLaunchArgument("autostart", default_value="true"),
         DeclareLaunchArgument(
+            "chassis_model",
+            default_value="mecanum",
+            choices=["mecanum", "sentry"],
+            description="Static chassis model: mecanum training car or sentry steering car",
+        ),
+        DeclareLaunchArgument(
             "visualization",
             default_value="rviz",
             description="Visualization backend: rviz, foxglove, or headless",
@@ -110,6 +116,7 @@ def generate_launch_description():
                 include("sentry_description", "description.launch.py", {
                     "use_sim_time": use_sim_time,
                     "use_rviz": "false",
+                    "chassis_model": LaunchConfiguration("chassis_model"),
                 }),
             ],
             scoped=True,

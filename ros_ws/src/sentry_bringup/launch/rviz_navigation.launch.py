@@ -101,11 +101,20 @@ def generate_launch_description():
             DeclareLaunchArgument("map", default_value=map_default),
             DeclareLaunchArgument("prior_pcd_file", default_value=pcd_default),
             DeclareLaunchArgument("rviz", default_value="true"),
+            DeclareLaunchArgument(
+                "chassis_model",
+                default_value="mecanum",
+                choices=["mecanum", "sentry"],
+                description="Static chassis model: mecanum training car or sentry steering car",
+            ),
             include("sentry_hardware", "lidar.launch.py", {"frame_id": "front_mid360"}),
             include(
                 "sentry_description",
                 "description.launch.py",
-                {"use_sim_time": use_sim_time},
+                {
+                    "use_sim_time": use_sim_time,
+                    "chassis_model": LaunchConfiguration("chassis_model"),
+                },
             ),
             mapping,
             localization,

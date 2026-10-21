@@ -1,0 +1,177 @@
+<?xml version="1.0"?>
+<!--
+  Current training car: static four-wheel mecanum chassis.
+
+  Geometry parameters (edit here when measuring the real car):
+    wheel_radius      = 0.045 m
+    wheel_width       = 0.049 m
+    wheel_x           = +/-0.1716 m
+    wheel_y           = +/-0.1362 m
+    base_size         = 0.450 x 0.250 x 0.086 m
+    base_link_z       = 0.045 m (wheel axle height)
+    mid360_x/y        = 0.15 / 0.0 m
+    mid360_ground_z   = 0.21 m  -> relative to base_link: 0.165 m
+    mid360_yaw        = -pi/2 (from the original mecanum laser_frame; verify in RViz)
+
+  All joints are fixed: this is a static TF/visual description, not a
+  simulation or ros2_control model. Keep the frame names base_footprint,
+  gimbal_yaw and front_mid360 because the Nav2/localization/perception
+  configs reference them.
+-->
+<robot name="sentry_mecanum">
+
+  <material name="base_gray"><color rgba="0.75 0.78 0.82 1.0"/></material>
+  <material name="wheel_dark"><color rgba="0.10 0.10 0.12 1.0"/></material>
+  <material name="lidar_dark"><color rgba="0.20 0.22 0.25 1.0"/></material>
+
+  <!-- Ground projection / Nav2 base_frame -->
+  <link name="base_footprint"/>
+
+  <link name="base_link">
+    <visual>
+      <origin xyz="0 0 0.0135" rpy="0 0 0"/>
+      <geometry><box size="0.450 0.250 0.086"/></geometry>
+      <material name="base_gray"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0.0135" rpy="0 0 0"/>
+      <geometry><box size="0.450 0.250 0.086"/></geometry>
+    </collision>
+    <inertial>
+      <mass value="1.0"/>
+      <inertia ixx="0.005825" ixy="0" ixz="0"
+               iyy="0.017491" iyz="0"
+               izz="0.022083"/>
+    </inertial>
+  </link>
+
+  <joint name="base_footprint_to_base_link" type="fixed">
+    <parent link="base_footprint"/>
+    <child link="base_link"/>
+    <origin xyz="0 0 0.045" rpy="0 0 0"/>
+  </joint>
+
+  <!-- Fixed wheels: only for TF/visualization. Positive X is vehicle forward. -->
+  <link name="wheel_front_left">
+    <visual>
+      <origin xyz="0 0 0" rpy="1.57079632679 0 0"/>
+      <geometry><cylinder radius="0.045" length="0.049"/></geometry>
+      <material name="wheel_dark"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="1.57079632679 0 0"/>
+      <geometry><cylinder radius="0.045" length="0.049"/></geometry>
+    </collision>
+    <inertial>
+      <mass value="0.0565"/>
+      <inertia ixx="0.0000399" ixy="0" ixz="0"
+               iyy="0.0000399" iyz="0"
+               izz="0.0000572"/>
+    </inertial>
+  </link>
+  <joint name="wheel_front_left_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="wheel_front_left"/>
+    <origin xyz="0.1716 0.1362 0" rpy="0 0 0"/>
+  </joint>
+
+  <link name="wheel_front_right">
+    <visual>
+      <origin xyz="0 0 0" rpy="1.57079632679 0 0"/>
+      <geometry><cylinder radius="0.045" length="0.049"/></geometry>
+      <material name="wheel_dark"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="1.57079632679 0 0"/>
+      <geometry><cylinder radius="0.045" length="0.049"/></geometry>
+    </collision>
+    <inertial>
+      <mass value="0.0565"/>
+      <inertia ixx="0.0000399" ixy="0" ixz="0"
+               iyy="0.0000399" iyz="0"
+               izz="0.0000572"/>
+    </inertial>
+  </link>
+  <joint name="wheel_front_right_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="wheel_front_right"/>
+    <origin xyz="0.1716 -0.1362 0" rpy="0 0 0"/>
+  </joint>
+
+  <link name="wheel_back_left">
+    <visual>
+      <origin xyz="0 0 0" rpy="1.57079632679 0 0"/>
+      <geometry><cylinder radius="0.045" length="0.049"/></geometry>
+      <material name="wheel_dark"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="1.57079632679 0 0"/>
+      <geometry><cylinder radius="0.045" length="0.049"/></geometry>
+    </collision>
+    <inertial>
+      <mass value="0.0565"/>
+      <inertia ixx="0.0000399" ixy="0" ixz="0"
+               iyy="0.0000399" iyz="0"
+               izz="0.0000572"/>
+    </inertial>
+  </link>
+  <joint name="wheel_back_left_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="wheel_back_left"/>
+    <origin xyz="-0.1716 0.1362 0" rpy="0 0 0"/>
+  </joint>
+
+  <link name="wheel_back_right">
+    <visual>
+      <origin xyz="0 0 0" rpy="1.57079632679 0 0"/>
+      <geometry><cylinder radius="0.045" length="0.049"/></geometry>
+      <material name="wheel_dark"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="1.57079632679 0 0"/>
+      <geometry><cylinder radius="0.045" length="0.049"/></geometry>
+    </collision>
+    <inertial>
+      <mass value="0.0565"/>
+      <inertia ixx="0.0000399" ixy="0" ixz="0"
+               iyy="0.0000399" iyz="0"
+               izz="0.0000572"/>
+    </inertial>
+  </link>
+  <joint name="wheel_back_right_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="wheel_back_right"/>
+    <origin xyz="-0.1716 -0.1362 0" rpy="0 0 0"/>
+  </joint>
+
+  <!-- Compatibility frame: the current car has no gimbal yet, but the Nav2
+       stack uses gimbal_yaw as robot_base_frame. Keep it fixed to base_link. -->
+  <link name="gimbal_yaw"/>
+  <joint name="gimbal_yaw_fixed_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="gimbal_yaw"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
+  <!-- MID360: 0.15 m forward, 0.21 m above ground. Relative to base_link:
+       z = 0.21 - 0.045 = 0.165 m. Yaw follows the original mecanum laser_frame. -->
+  <link name="front_mid360">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><cylinder radius="0.035" length="0.04"/></geometry>
+      <material name="lidar_dark"/>
+    </visual>
+    <inertial>
+      <mass value="0.01"/>
+      <inertia ixx="0.000001" ixy="0" ixz="0"
+               iyy="0.000001" iyz="0"
+               izz="0.000001"/>
+    </inertial>
+  </link>
+  <joint name="front_mid360_joint" type="fixed">
+    <parent link="gimbal_yaw"/>
+    <child link="front_mid360"/>
+    <origin xyz="0.15 0 0.165" rpy="0 0 -1.57079632679"/>
+  </joint>
+
+</robot>

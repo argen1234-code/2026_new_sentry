@@ -39,7 +39,7 @@ scripts/
 | 包 | 职责 |
 |---|---|
 | `sentry_interfaces` | 自定义消息与服务定义 |
-| `sentry_description` | URDF、mesh、RViz 配置 |
+| `sentry_description` | 静态描述：默认当前训练车麦轮模型，`chassis_model:=sentry` 切换旧舵轮+云台模型；含 mesh、RViz 配置 |
 | `sentry_hardware` | 雷达与裁判系统 launch、MID360 网络配置 |
 | `livox_ros_driver2` | Livox MID360 驱动（含 arm64 SDK） |
 | `extra_cmd` | `cmd_vel` 转 UDP 底盘指令 |

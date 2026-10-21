@@ -13,7 +13,17 @@ from nav2_common.launch import RewrittenYaml
 
 
 def launch_setup(context: LaunchContext):
-    urdf_path = context.launch_configurations["robot_description_file"]
+    description_share = get_package_share_directory("sentry_description")
+    chassis_model = context.launch_configurations.get("chassis_model", "mecanum")
+    override = context.launch_configurations.get("robot_description_file", "")
+
+    if override:
+        urdf_path = override
+    elif chassis_model == "sentry":
+        urdf_path = os.path.join(description_share, "urdf", "robot.urdf")
+    else:
+        urdf_path = os.path.join(description_share, "urdf", "mecanum_static.urdf")
+
     with open(urdf_path, "r", encoding="utf-8") as f:
         robot_description = f.read()
 
@@ -71,8 +81,15 @@ def generate_launch_description():
         DeclareLaunchArgument("namespace", default_value=""),
         DeclareLaunchArgument("use_sim_time", default_value="false"),
         DeclareLaunchArgument(
+            "chassis_model",
+            default_value="mecanum",
+            choices=["mecanum", "sentry"],
+            description="Static robot model: mecanum training chassis or sentry steering chassis",
+        ),
+        DeclareLaunchArgument(
             "robot_description_file",
-            default_value=os.path.join(description_share, "urdf", "robot.urdf"),
+            default_value="",
+            description="Explicit URDF path; overrides chassis_model when non-empty",
         ),
         DeclareLaunchArgument(
             "params_file",

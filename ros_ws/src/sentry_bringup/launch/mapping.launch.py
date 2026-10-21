@@ -28,9 +28,16 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument("use_sim_time", default_value="false"),
         DeclareLaunchArgument("rviz", default_value="false"),
+        DeclareLaunchArgument(
+            "chassis_model",
+            default_value="mecanum",
+            choices=["mecanum", "sentry"],
+            description="Static chassis model: mecanum training car or sentry steering car",
+        ),
         include("sentry_hardware", "lidar.launch.py"),
         include("sentry_description", "description.launch.py", {
             "use_sim_time": LaunchConfiguration("use_sim_time"),
+            "chassis_model": LaunchConfiguration("chassis_model"),
         }),
         include("sentry_perception", "perception.launch.py"),
         include("sentry_localization", "mapping.launch.py"),
