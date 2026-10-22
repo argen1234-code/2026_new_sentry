@@ -12,6 +12,7 @@
   <exec_depend>point_lio</exec_depend>
   <exec_depend>small_gicp_relocalization</exec_depend>
   <exec_depend>slam_toolbox</exec_depend>
+  <exec_depend>lifecycle_msgs</exec_depend>
   <exec_depend>nav2_map_server</exec_depend>
   <exec_depend>nav2_lifecycle_manager</exec_depend>
   <exec_depend>pointcloud_to_laserscan</exec_depend>

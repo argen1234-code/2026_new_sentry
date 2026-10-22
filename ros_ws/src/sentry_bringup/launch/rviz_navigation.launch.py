@@ -37,7 +37,9 @@ def generate_launch_description():
         source_file=params_file,
         replacements={"<robot_namespace>": ""},
     )
-    rviz_config = os.path.join(nav_share, "rviz", "nav2_default_view.rviz")
+    # 1024x600 小屏：只保留 Displays 面板，窗口固定为 1000x520，
+    # 避免 Qt 按默认面板布局把窗口撑到 1100+ 像素高。
+    rviz_config = os.path.join(nav_share, "rviz", "nav2_compact_view.rviz")
     map_default = os.path.join(nav_share, "map", "reality", "RMUL.yaml")
     pcd_default = os.path.join(nav_share, "pcd", "reality", "RMUL.pcd")
 
@@ -66,9 +68,8 @@ def generate_launch_description():
     )
 
     # navigation_launch supplies terrain processing, odometry/scan adapters,
-    # and the Nav2 planner/controller servers.  The point-cloud-to-scan node
-    # below is kept here because it is also required by slam_toolbox in mapping
-    # mode and is intentionally a real-robot-only node.
+    # and the Nav2 planner/controller servers.  /obstacle_scan is produced by
+    # sentry_localization/mapping.launch.py, so no extra node is needed here.
     navigation = include(
         "pb2025_nav_bringup",
         "navigation_launch.py",
@@ -78,15 +79,6 @@ def generate_launch_description():
             "params_file": resolved_params_file,
             "use_composition": "False",
         },
-    )
-
-    cloud_to_scan = Node(
-        package="pointcloud_to_laserscan",
-        executable="pointcloud_to_laserscan_node",
-        name="pointcloud_to_laserscan",
-        output="screen",
-        parameters=[resolved_params_file],
-        remappings=[("cloud_in", "terrain_map_ext"), ("scan", "obstacle_scan")],
     )
 
     return LaunchDescription(
@@ -102,6 +94,11 @@ def generate_launch_description():
             DeclareLaunchArgument("prior_pcd_file", default_value=pcd_default),
             DeclareLaunchArgument("rviz", default_value="true"),
             DeclareLaunchArgument(
+                "enable_motion",
+                default_value="false",
+                description="Allow /cmd_vel to drive the chassis over USB (safety gate)",
+            ),
+            DeclareLaunchArgument(
                 "chassis_model",
                 default_value="mecanum",
                 choices=["mecanum", "sentry"],
@@ -109,7 +106,7 @@ def generate_launch_description():
             ),
             include("sentry_hardware", "lidar.launch.py", {"frame_id": "front_mid360"}),
             include("usb_bridge", "usb_bridge.launch.py", {
-                "enable_motion": "false",
+                "enable_motion": LaunchConfiguration("enable_motion"),
             }),
             include(
                 "sentry_description",
@@ -121,7 +118,6 @@ def generate_launch_description():
             ),
             mapping,
             localization,
-            cloud_to_scan,
             navigation,
             Node(
                 package="rviz2",

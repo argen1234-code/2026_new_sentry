@@ -16,5 +16,6 @@ def generate_launch_description():
         Node(package="terrain_analysis", executable="terrainAnalysis", name="terrain_analysis", output="screen", parameters=[params]),
         Node(package="terrain_analysis_ext", executable="terrainAnalysisExt", name="terrain_analysis_ext", output="screen", parameters=[params]),
         Node(package="sensor_scan_generation", executable="sensor_scan_generation_node", name="sensor_scan_generation", output="screen", parameters=[{"lidar_frame": LaunchConfiguration("lidar_frame"), "base_frame": LaunchConfiguration("base_frame"), "robot_base_frame": LaunchConfiguration("robot_base_frame")}]),
-        Node(package="pointcloud_to_laserscan", executable="pointcloud_to_laserscan_node", name="pointcloud_to_laserscan", output="screen", parameters=[params], remappings=[("cloud_in", "terrain_map_ext"), ("scan", "obstacle_scan")]),
+        # pointcloud_to_laserscan is started by sentry_localization/mapping.launch.py
+        # so that every entry point has exactly one /obstacle_scan publisher.
     ])

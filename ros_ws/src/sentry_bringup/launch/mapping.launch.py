@@ -22,7 +22,7 @@ def generate_launch_description():
     rviz_config = os.path.join(
         get_package_share_directory("pb2025_nav_bringup"),
         "rviz",
-        "nav2_default_view.rviz",
+        "nav2_compact_view.rviz",
     )
 
     return LaunchDescription([

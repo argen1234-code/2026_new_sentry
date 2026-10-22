@@ -7,7 +7,7 @@
       <PipelineSequence name="NavigateWithReplanning">
         <RateController hz="1">
           <!-- 先连续重试3次（不清地图），3次全败后才清局部+全局代价地图 -->
-          <RecoveryNode name="ComputePathToPose"
+          <RecoveryNode name="ComputePathToPoseRecovery"
                         number_of_retries="1">
             <!-- 内层：先连续尝试3次不清地图 -->
             <RecoveryNode name="ComputePathToPose_Retry3"
@@ -32,7 +32,7 @@
           <FollowPath path="{path}"
                       controller_id="FollowPath"/>
           <Sequence name="LocalRecoveryWithWait">
-            <ClearEntireCostmap name="ClearLocalCostmap-Context"
+            <ClearEntireCostmap name="ClearLocalCostmap-FollowPath"
                                 service_name="local_costmap/clear_entirely_local_costmap"/>
             <Wait wait_duration="1.0"/>
           </Sequence>

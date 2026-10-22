@@ -26,7 +26,9 @@ def generate_launch_description():
             DeclareLaunchArgument("xfer_format", default_value="4"),
             DeclareLaunchArgument("multi_topic", default_value="0"),
             DeclareLaunchArgument(
-                "rviz",
+                # 不要用通用名 rviz：上层 launch 的 rviz:=true 会泄漏到这里，
+                # 导致一次启动打开两个 RViz 窗口。
+                "lidar_rviz",
                 default_value="false",
                 description="Also open RViz2 for TF inspection",
             ),
@@ -60,7 +62,7 @@ def generate_launch_description():
                 executable="rviz2",
                 name="rviz2",
                 output="screen",
-                condition=IfCondition(LaunchConfiguration("rviz")),
+                condition=IfCondition(LaunchConfiguration("lidar_rviz")),
                 arguments=["-d", rviz_config],
             ),
         ]

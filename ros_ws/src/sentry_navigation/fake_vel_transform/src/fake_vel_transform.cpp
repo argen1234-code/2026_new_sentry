@@ -36,6 +36,10 @@ FakeVelTransform::FakeVelTransform(const rclcpp::NodeOptions & options)
   this->declare_parameter<std::string>("input_cmd_vel_topic", "");
   this->declare_parameter<std::string>("output_cmd_vel_topic", "");
   this->declare_parameter<float>("init_spin_speed", 0.0);
+  // false: the chassis has no independent gimbal yaw (e.g. mecanum test car).
+  // Then gimbal_yaw is fixed to base_link, the fake frame is identity and
+  // Nav2 velocities pass through unchanged.
+  this->declare_parameter<bool>("use_gimbal", true);
 
   this->get_parameter("robot_base_frame", robot_base_frame_);
   this->get_parameter("fake_robot_base_frame", fake_robot_base_frame_);
@@ -45,6 +49,7 @@ FakeVelTransform::FakeVelTransform(const rclcpp::NodeOptions & options)
   this->get_parameter("input_cmd_vel_topic", input_cmd_vel_topic_);
   this->get_parameter("output_cmd_vel_topic", output_cmd_vel_topic_);
   this->get_parameter("init_spin_speed", spin_speed_);
+  this->get_parameter("use_gimbal", use_gimbal_);
 
   tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(*this);
 
@@ -78,6 +83,11 @@ void FakeVelTransform::cmdSpinCallback(const example_interfaces::msg::Float32::S
 
 void FakeVelTransform::odometryCallback(const nav_msgs::msg::Odometry::ConstSharedPtr & msg)
 {
+  if (!use_gimbal_) {
+    // No independent gimbal yaw: keep the frame pair identical.
+    current_robot_base_angle_ = 0.0;
+    return;
+  }
   // NOTE: Haven't synced with local_plan
   if ((rclcpp::Clock().now() - last_controller_activate_time_).seconds() > CONTROLLER_TIMEOUT) {
     current_robot_base_angle_ = tf2::getYaw(msg->pose.pose.orientation);
@@ -87,17 +97,11 @@ void FakeVelTransform::odometryCallback(const nav_msgs::msg::Odometry::ConstShar
 void FakeVelTransform::cmdVelCallback(const geometry_msgs::msg::Twist::SharedPtr msg)
 {
   std::lock_guard<std::mutex> lock(cmd_vel_mutex_);
-  const bool is_zero_vel = std::abs(msg->linear.x) < EPSILON && std::abs(msg->linear.y) < EPSILON &&
-                           std::abs(msg->angular.z) < EPSILON;
-  if (
-    is_zero_vel ||
-    (rclcpp::Clock().now() - last_controller_activate_time_).seconds() > CONTROLLER_TIMEOUT) {
-    // If received velocity cannot be synchronized, publish it directly
-    auto aft_tf_vel = transformVelocity(msg, current_robot_base_angle_);
-    cmd_vel_chassis_pub_->publish(aft_tf_vel);
-  } else {
-    latest_cmd_vel_ = msg;
-  }
+  // Always cache: the 100 Hz timer below republishes at a steady rate, so a
+  // bursty input (observed ~12 Hz with 300 ms gaps under CPU load) does not
+  // turn into a bursty /cmd_vel for the chassis bridge.
+  latest_cmd_vel_ = msg;
+  last_cmd_vel_time_ = std::chrono::steady_clock::now();
 }
 
 void FakeVelTransform::localPlanCallback(const nav_msgs::msg::Path::ConstSharedPtr & /*msg*/)
@@ -113,8 +117,9 @@ void FakeVelTransform::publishCmdVel()
     return;
   }
 
-  // 控制器超时（goal reached 后停止发送 cmd_vel）时，清零缓存，发布零速并停止定时器继续刷旧数据
-  if ((rclcpp::Clock().now() - last_controller_activate_time_).seconds() > CONTROLLER_TIMEOUT) {
+  // Input timeout: stop republishing a stale command.
+  const auto age = std::chrono::steady_clock::now() - last_cmd_vel_time_;
+  if (std::chrono::duration<double>(age).count() > CONTROLLER_TIMEOUT) {
     latest_cmd_vel_ = nullptr;
     geometry_msgs::msg::Twist zero_vel;
     cmd_vel_chassis_pub_->publish(zero_vel);
@@ -134,7 +139,7 @@ void FakeVelTransform::publishTransform()
   t.header.frame_id = robot_base_frame_;
   t.child_frame_id = fake_robot_base_frame_;
   tf2::Quaternion q;
-  q.setRPY(0, 0, -current_robot_base_angle_);
+  q.setRPY(0, 0, use_gimbal_ ? -current_robot_base_angle_ : 0.0);
   t.transform.rotation = tf2::toMsg(q);
   tf_broadcaster_->sendTransform(t);
 }
@@ -143,6 +148,10 @@ geometry_msgs::msg::Twist FakeVelTransform::transformVelocity(
   const geometry_msgs::msg::Twist::SharedPtr & twist, float yaw_diff)
 {
   geometry_msgs::msg::Twist aft_tf_vel;
+  // No gimbal: Nav2 velocities are already expressed in the chassis frame.
+  if (!use_gimbal_) {
+    yaw_diff = 0.0F;
+  }
   aft_tf_vel.angular.z = twist->angular.z + spin_speed_;
   aft_tf_vel.linear.x = twist->linear.x * cos(yaw_diff) + twist->linear.y * sin(yaw_diff);
   aft_tf_vel.linear.y = -twist->linear.x * sin(yaw_diff) + twist->linear.y * cos(yaw_diff);

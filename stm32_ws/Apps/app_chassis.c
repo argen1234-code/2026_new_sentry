@@ -166,6 +166,14 @@ static uint32_t app_chassis_dm_tx_drop_count;
 /** @brief 最近一次重发使能的时间，单位 ms（HAL tick）。 */
 static uint32_t app_chassis_dm_last_enable_ms;
 
+/** @brief Stop 模式计时起点与状态；持续空闲后失能，避免电机保持力矩啸叫。 */
+static uint32_t app_chassis_dm_idle_since_ms;
+static uint8_t app_chassis_dm_idle_timer_active;
+static uint8_t app_chassis_dm_idle_disabled;
+
+/** @brief 运行中某轮反馈 state=0（未使能）的计时，用于自动补模式并使能。 */
+static uint32_t app_chassis_dm_disabled_since_ms[CHASSIS_DRIVE_MAX];
+
 /** @brief 使能帧发送成功次数。 */
 static uint32_t app_chassis_dm_enable_count;
 
@@ -207,6 +215,7 @@ static uint8_t app_chassis_dm_fault_mask;
 static void app_chassis_dm_start(void);
 static void app_chassis_dm_set_speed_mode(void);
 static void app_chassis_dm_enable_all(uint32_t now_ms);
+static void app_chassis_dm_idle_disable(uint32_t now_ms);
 static void app_chassis_dm_force_stop(uint32_t now_ms);
 #endif
 
@@ -914,6 +923,20 @@ static void app_chassis_send(const ChassisOutput *output,
     uint8_t send_ok;
     uint32_t i;
 
+    /* 空闲失能后不再向已失能电机发送速度帧，重新使能时本循环会恢复。 */
+    if (app_chassis_dm_idle_disabled != 0U) {
+        if (drive_send != NULL) {
+            *drive_send = MotorOk;
+        }
+        if (steer_send != NULL) {
+            *steer_send = MotorOk;
+        }
+        if (zero_out != NULL) {
+            *zero_out = 1U;
+        }
+        return;
+    }
+
     send_ok = ((output != NULL) &&
                (status == ChassisOk) &&
                (output->send_enable != 0U)) ? 1U : 0U;
@@ -1264,6 +1287,23 @@ static void app_chassis_dm_enable_all(uint32_t now_ms)
     }
 }
 
+/**
+ * @brief 空闲失能：先发零速再发失能帧，之后不再周期性重发使能。
+ * @note  下一帧运动指令到来时会立即重新使能（见控制循环）。
+ */
+static void app_chassis_dm_idle_disable(uint32_t now_ms)
+{
+    uint32_t i;
+
+    for (i = 0U; i < CHASSIS_DRIVE_MAX; i++) {
+        (void)motor_dm_speed_stop(MOTOR_CHASSIS_BUS,
+                                  (uint16_t)(ROBOT_TARGET_MOTOR_CHASSIS_DM_ID_0 + i));
+    }
+    app_chassis_dm_idle_disabled = 1U;
+    app_chassis_dm_idle_timer_active = 0U;
+    app_chassis_dm_idle_since_ms = now_ms;
+}
+
 static void app_chassis_dm_start(void)
 {
     motor_mit_fb_t fb;
@@ -1279,6 +1319,11 @@ static void app_chassis_dm_start(void)
     app_chassis_dm_last_enable_ms = 0U;
     app_chassis_dm_enable_count = 0U;
     app_chassis_dm_enable_fail_count = 0U;
+    app_chassis_dm_idle_since_ms = 0U;
+    app_chassis_dm_idle_timer_active = 0U;
+    app_chassis_dm_idle_disabled = 0U;
+    (void)memset(app_chassis_dm_disabled_since_ms, 0,
+                 sizeof(app_chassis_dm_disabled_since_ms));
     for (i = 0U; i < CHASSIS_DRIVE_MAX; i++) {
         app_chassis_dm_fb_min[i] = 0.0F;
         app_chassis_dm_fb_max[i] = 0.0F;
@@ -1411,15 +1456,38 @@ static void app_chassis_entry(void *argument)
                 app_chassis_drive_offline_count[i]++;
             }
         }
+        /*
+         * 空闲失能时 DM 电机不再上报反馈是预期行为，不能当作故障；
+         * 否则 300 ms 失能后会在 1 s 后误锁存。重新使能后若反馈仍不
+         * 恢复，下面的故障逻辑会照常锁存。
+         */
         dm_fault = ((app_chassis_dm_ready == 0U) ||
                     (app_chassis_dm_fault_latched != 0U) ||
                     (app_chassis_emergency != 0U) ||
-                    (app_chassis_drive_count(&input) <
-                     app_chassis_ctx.cfg.min_online_motors))
+                    ((app_chassis_dm_idle_disabled == 0U) &&
+                     (app_chassis_drive_count(&input) <
+                      app_chassis_ctx.cfg.min_online_motors)))
                        ? 1U
                        : 0U;
         if ((dm_fault != 0U) && (app_chassis_dm_fault_since_ms == 0U)) {
             app_chassis_dm_fault_mask = app_chassis_drive_mask(&input);
+        }
+
+        /*
+         * 启动阶段：MCU 可能比电机先上电，此时反馈未就绪。
+         * 周期性重试使能并等待反馈，不锁存故障；就绪后恢复正常故障逻辑。
+         */
+        if (app_chassis_dm_ready == 0U) {
+            if ((uint32_t)(dm_now_ms - app_chassis_dm_last_enable_ms) >=
+                ROBOT_CHASSIS_DM_START_RETRY_MS) {
+                app_chassis_dm_enable_all(dm_now_ms);
+            }
+            if (app_chassis_drive_count(&input) >=
+                app_chassis_ctx.cfg.min_online_motors) {
+                app_chassis_dm_ready = 1U;
+                app_chassis_dm_start_ms = dm_now_ms;
+                app_chassis_dm_fault_since_ms = 0U;
+            }
         }
 #else
         dm_fault = 0U;
@@ -1432,12 +1500,87 @@ static void app_chassis_entry(void *argument)
         }
 
 #if defined(ROBOT_CHASSIS_DRIVE_MODE_DM_SPEED)
-        /* 运行中周期性重发使能，补偿单帧丢失；故障锁存后不再使能。 */
+        /*
+         * 空闲失能：
+         *   速度模式在目标 0 时仍闭环保持，会产生持续保持电流和啸叫。
+         *   Stop 持续 ROBOT_CHASSIS_DM_IDLE_DISABLE_MS 后失能；收到运动
+         *   指令立即重新使能，保持原有的 20 ms 使能重发逻辑。
+         */
+#if defined(ROBOT_CHASSIS_DM_IDLE_DISABLE_MS)
+        {
+            /*
+             * 注意：不能要求 output.send_enable != 0。
+             * 失能后电机不上报反馈，chassis_step 会因在线数不足拒绝输出；
+             * 若把 send_enable 作为重新使能条件，就会形成死锁。
+             */
+            uint8_t dm_motion_cmd = ((dm_fault == 0U) &&
+                                     (input.cmd.online != 0U) &&
+                                     (input.cmd.force_stop == 0U) &&
+                                     (input.cmd.mode != ChassisModeStop))
+                                        ? 1U
+                                        : 0U;
+
+            if (dm_motion_cmd != 0U) {
+                app_chassis_dm_idle_timer_active = 0U;
+                app_chassis_dm_idle_since_ms = 0U;
+                if (app_chassis_dm_idle_disabled != 0U) {
+                    app_chassis_dm_idle_disabled = 0U;
+                    /* 失能后个别电机可能丢失 CTRL_MODE=3，先补写再使能。 */
+                    for (i = 0U; i < CHASSIS_DRIVE_MAX; i++) {
+                        (void)motor_dm_param_cmd(MOTOR_CHASSIS_BUS,
+                                                 (uint16_t)(ROBOT_TARGET_MOTOR_CHASSIS_DM_ID_0 + i),
+                                                 0x55U, 0x0AU, 3U);
+                    }
+                    app_chassis_dm_enable_all(dm_now_ms);
+                }
+            } else if ((dm_fault == 0U) && (app_chassis_dm_fault_latched == 0U)) {
+                if (app_chassis_dm_idle_disabled == 0U) {
+                    if (app_chassis_dm_idle_timer_active == 0U) {
+                        app_chassis_dm_idle_timer_active = 1U;
+                        app_chassis_dm_idle_since_ms = dm_now_ms;
+                    } else if ((uint32_t)(dm_now_ms - app_chassis_dm_idle_since_ms) >=
+                               ROBOT_CHASSIS_DM_IDLE_DISABLE_MS) {
+                        app_chassis_dm_idle_disable(dm_now_ms);
+                    }
+                }
+            }
+        }
+#endif
+
+        /* 运行中周期性重发使能，补偿单帧丢失；故障锁存或空闲失能后不再使能。 */
         if ((dm_fault == 0U) &&
             (app_chassis_dm_fault_latched == 0U) &&
+            (app_chassis_dm_idle_disabled == 0U) &&
             ((uint32_t)(dm_now_ms - app_chassis_dm_last_enable_ms) >=
              ROBOT_CHASSIS_DM_ENABLE_PERIOD_MS)) {
             app_chassis_dm_enable_all(dm_now_ms);
+        }
+
+        /*
+         * 单轮失能恢复：运行中某轮反馈 state=0 但仍有输出，多为 CTRL_MODE
+         * 丢失。每 300 ms 补写一次模式并使能该轮，避免只有单轮不转。
+         */
+        for (i = 0U; i < CHASSIS_DRIVE_MAX; i++) {
+            if ((dm_fault == 0U) &&
+                (app_chassis_dm_fault_latched == 0U) &&
+                (app_chassis_dm_idle_disabled == 0U) &&
+                (output.send_enable != 0U) &&
+                (input.drive_fb[i].online != 0U) &&
+                (input.drive_fb[i].state == 0U)) {
+                if (app_chassis_dm_disabled_since_ms[i] == 0U) {
+                    app_chassis_dm_disabled_since_ms[i] = dm_now_ms;
+                } else if ((uint32_t)(dm_now_ms - app_chassis_dm_disabled_since_ms[i]) >= 300U) {
+                    (void)motor_dm_param_cmd(MOTOR_CHASSIS_BUS,
+                                             (uint16_t)(ROBOT_TARGET_MOTOR_CHASSIS_DM_ID_0 + i),
+                                             0x55U, 0x0AU, 3U);
+                    (void)motor_dm_speed_cmd(MOTOR_CHASSIS_BUS,
+                                             (uint16_t)(ROBOT_TARGET_MOTOR_CHASSIS_DM_ID_0 + i),
+                                             DmMotorEnable);
+                    app_chassis_dm_disabled_since_ms[i] = dm_now_ms;
+                }
+            } else {
+                app_chassis_dm_disabled_since_ms[i] = 0U;
+            }
         }
 
         /* 记录每轮首次使能、首次起转和首次达到目标 80% 的时刻。 */
@@ -1483,14 +1626,18 @@ static void app_chassis_entry(void *argument)
             app_chassis_dm_tx_drop_count++;
         }
         if (dm_fault != 0U) {
-            if (app_chassis_dm_fault_since_ms == 0U) {
-                app_chassis_dm_fault_since_ms = dm_now_ms;
-            }
-            /* 启动后 2000 ms 内允许反馈短暂不完整，不锁存故障。 */
-            if (((uint32_t)(dm_now_ms - app_chassis_dm_start_ms) >= 2000U) &&
-                ((uint32_t)(dm_now_ms - app_chassis_dm_fault_since_ms) >=
-                 ROBOT_CHASSIS_DM_DISABLE_AFTER_MS)) {
-                app_chassis_dm_force_stop(dm_now_ms);
+            if (app_chassis_dm_ready == 0U) {
+                /* 反馈尚未就绪：由上面的重试逻辑处理，不锁存故障。 */
+                app_chassis_dm_fault_since_ms = 0U;
+            } else {
+                if (app_chassis_dm_fault_since_ms == 0U) {
+                    app_chassis_dm_fault_since_ms = dm_now_ms;
+                }
+                /* 就绪后允许反馈短暂不完整，持续超时再锁存故障。 */
+                if ((uint32_t)(dm_now_ms - app_chassis_dm_fault_since_ms) >=
+                    ROBOT_CHASSIS_DM_DISABLE_AFTER_MS) {
+                    app_chassis_dm_force_stop(dm_now_ms);
+                }
             }
         } else {
             app_chassis_dm_fault_since_ms = 0U;
@@ -1556,6 +1703,11 @@ uint8_t app_chassis_init(void)
     app_chassis_dm_last_enable_ms = 0U;
     app_chassis_dm_enable_count = 0U;
     app_chassis_dm_enable_fail_count = 0U;
+    app_chassis_dm_idle_since_ms = 0U;
+    app_chassis_dm_idle_timer_active = 0U;
+    app_chassis_dm_idle_disabled = 0U;
+    (void)memset(app_chassis_dm_disabled_since_ms, 0,
+                 sizeof(app_chassis_dm_disabled_since_ms));
     app_chassis_dm_mode_ok_count = 0U;
     app_chassis_dm_mode_fail_count = 0U;
     app_chassis_dm_fault_mask = 0U;

@@ -60,7 +60,7 @@ class UsbBridge(Node):
         self.declare_parameter('port', 'auto')
         self.declare_parameter('baud', 115200)
         self.declare_parameter('enabled', True)
-        self.declare_parameter('command_timeout', 0.25)
+        self.declare_parameter('command_timeout', 0.4)
         self.declare_parameter('tx_period', 0.02)
         self.declare_parameter('poll_period', 0.005)
         self.declare_parameter('link_timeout', 1.0)

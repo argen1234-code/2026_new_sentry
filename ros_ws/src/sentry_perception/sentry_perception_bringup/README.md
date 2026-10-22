@@ -7,4 +7,7 @@
 ros2 launch sentry_perception perception.launch.py
 ```
 
-关键输出：`terrain_map`、`terrain_map_ext`、`obstacle_scan`。
+关键输出：`terrain_map`、`terrain_map_ext`。
+
+`obstacle_scan` 由 `sentry_localization` 的 `mapping.launch.py` 从
+`terrain_map_ext` 生成，保证每个启动入口只有一个 `pointcloud_to_laserscan`。

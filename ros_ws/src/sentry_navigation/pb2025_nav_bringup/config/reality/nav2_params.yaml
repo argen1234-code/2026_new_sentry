@@ -64,15 +64,20 @@ point_lio:
       plane_thr: 0.1                                    # 0.05, the threshold for plane criteria, the smaller, the flatter a plane
       match_s: 81.0
       ivox_grid_resolution: 0.5
-      gravity: [0.02698296437263489, -0.03845080200433731, 0.9922939041137695]               # gravity to be aligned
-      gravity_init: [0.03938296437263489, -0.02185080200433731, 0.9919939041137695]         # preknown gravity in the first IMU body frame, use when imu_en is False or start from a non-stationary state
+      # 当前 MID360 实测：静止时 /livox/imu 加速度约为 +1 g（Z≈0.994）。
+      # 这里必须与 point_lio/config/mid360.yaml 一致；用旧哨兵 IMU 的
+      # +Z 单位向量会让 Point-LIO 初始化翻转约 180°（roll）。
+      gravity: [0.0, 0.0, -9.810]                       # gravity to be aligned
+      gravity_init: [0.0, 0.0, -9.810]                  # preknown gravity in the first IMU body frame, use when imu_en is False or start from a non-stationary state
       extrinsic_T: [ -0.011, -0.02329, 0.04412 ]
       extrinsic_R: [ 1.0, 0.0, 0.0,
                      0.0, 1.0, 0.0,
                      0.0, 0.0, 1.0 ]
 
     odometry:
-      publish_odometry_without_downsample: True
+      # True 会按 IMU 频率发布里程计（实测 >1 kHz），把 /tf 和
+      # message_filters 同步压垮；与已验证的 mid360.yaml 保持一致。
+      publish_odometry_without_downsample: False
 
     publish:
       path_en: False                                    # False: close the path output
@@ -152,6 +157,10 @@ terrain_analysis_ext:
 fake_vel_transform:
   ros__parameters:
     use_sim_time: False
+    # 当前麦轮训练车没有独立云台 yaw，gimbal_yaw 固定在 base_link。
+    # false: gimbal_yaw -> gimbal_yaw_fake 恒等，Nav2 速度原样下发。
+    # 换正式云台底盘后改为 true。
+    use_gimbal: False
     odom_topic: "odometry"
     robot_base_frame: "gimbal_yaw"
     fake_robot_base_frame: "gimbal_yaw_fake"
@@ -220,7 +229,9 @@ slam_toolbox:
     debug_logging: false
     throttle_scans: 1
     scan_queue_size: 10
-    transform_publish_period: 0.0                # if 0 never publishes odometry
+    # >0 才会发布 map->odom；建图+导航时由 slam_toolbox 负责该 TF。
+    # 为 0 时依赖 launch 里的静态 map->odom，扫描匹配修正无法反映到位姿。
+    transform_publish_period: 0.02
     map_update_interval: 0.5
     resolution: 0.05
     min_laser_range: 0.4                         # for rastering images
@@ -232,7 +243,9 @@ slam_toolbox:
     enable_interactive_mode: true
 
     # General Parameters
-    use_scan_matching: false
+    # 原值为 false：完全信任 Point-LIO 里程计，手推/抬动时漂移会直接把墙抹成
+    # 扇形。开启后 slam_toolbox 会把每帧扫描配准到已有地图，边界更连续。
+    use_scan_matching: true
     use_scan_barycenter: true
     minimum_travel_distance: 0.1
     minimum_travel_heading: 0.1
@@ -279,14 +292,12 @@ bt_navigator:
     default_server_timeout: 300  # 增加到300秒，让目标有更多时间完成
     wait_for_service_timeout: 1000
     action_server_result_timeout: 900.0  # 增加action超时时间
-    navigators: ["navigate_to_pose", "navigate_through_poses"]
+    # Jazzy 下两个 navigator 会重复注册同一套 BT 节点（ID already registered），
+    # 当前只保留 NavigateToPose；需要多点导航时再排查。
+    navigators: ["navigate_to_pose"]
     navigate_to_pose:
-      plugin: "nav2_bt_navigator/NavigateToPoseNavigator"
-    navigate_through_poses:
-      plugin: "nav2_bt_navigator/NavigateThroughPosesNavigator"
-    default_nav_to_pose_bt_xml: $(find-pkg-share pb2025_nav_bringup)/behavior_trees/navigate_to_pose_w_replanning_and_recovery.xml
-    default_nav_through_poses_bt_xml: $(find-pkg-share pb2025_nav_bringup)/behavior_trees/navigate_through_poses_w_replanning_and_recovery.xml
-    plugin_lib_names:
+      plugin: "nav2_bt_navigator::NavigateToPoseNavigator"
+      plugin_lib_names:
       - nav2_compute_path_to_pose_action_bt_node
       - nav2_compute_path_through_poses_action_bt_node
       - nav2_smooth_path_action_bt_node
@@ -334,6 +345,10 @@ bt_navigator:
       - nav2_assisted_teleop_cancel_bt_node
       - nav2_drive_on_heading_cancel_bt_node
       - nav2_is_battery_charging_condition_bt_node
+    navigate_through_poses:
+      plugin: "nav2_bt_navigator::NavigateThroughPosesNavigator"
+    default_nav_to_pose_bt_xml: $(find-pkg-share pb2025_nav_bringup)/behavior_trees/navigate_to_pose_w_replanning_and_recovery.xml
+    default_nav_through_poses_bt_xml: $(find-pkg-share pb2025_nav_bringup)/behavior_trees/navigate_through_poses_w_replanning_and_recovery.xml
 
 controller_server:
   ros__parameters:
@@ -341,7 +356,8 @@ controller_server:
     odom_topic: odometry
     controller_frequency: 20.0
     min_x_velocity_threshold: 0.001
-    min_y_velocity_threshold: 0.5
+    # 麦轮横移上限只有 0.3 m/s，原值 0.5 会把所有 vy 清零
+    min_y_velocity_threshold: 0.001
     min_theta_velocity_threshold: 0.001
     failure_tolerance: 0.3
     progress_checker_plugins: ["progress_checker"]
@@ -354,8 +370,9 @@ controller_server:
     general_goal_checker:
       stateful: True
       plugin: "nav2_controller::SimpleGoalChecker"
-      xy_goal_tolerance: 0.9
-      yaw_goal_tolerance: 0.7    # ~11.5度，更严格的朝向精度要求
+      # 0.45 m 车体：0.9 m / 0.7 rad 会在离目标很远就判定到达
+      xy_goal_tolerance: 0.2
+      yaw_goal_tolerance: 0.3    # ~17度
     FollowPath:
       plugin: "pb_omni_pid_pursuit_controller::OmniPidPursuitController"
       translation_kp: 3.0
@@ -375,12 +392,12 @@ controller_server:
       use_interpolation: true  # 启用插值，使路径更平滑
       use_rotate_to_heading: true  # 启用先转向再移动，角度偏差大时先原地转向
       use_rotate_to_heading_treshold: 0.7   # 偏角阈值（弧度，约28.6度），超过此值先原地转向
-      rotate_to_heading_angular_vel: 2.0    # 大角度转向时的角速度
-      max_angular_accel: 1.0                # 最大角加速度，使转向更平滑
-      v_linear_min: -2.5
-      v_linear_max: 2.5
-      v_angular_min: -2.0   # 提高最大角速度上限，允许大角度快速转向
-      v_angular_max: 2.0    # 提高最大角速度上限，允许大角度快速转向
+      rotate_to_heading_angular_vel: 0.8    # 底盘基础角速度 1.0 rad/s
+      max_angular_accel: 3.0                # 底盘旋转斜坡 4.0 rad/s^2
+      v_linear_min: -0.45                   # 底盘基础速度 0.45 m/s
+      v_linear_max: 0.45
+      v_angular_min: -1.0
+      v_angular_max: 1.0
       curvature_min: 0.4                                # 低曲率阈值，低于此值不减速。
       curvature_max: 0.7                                # 高曲率阈值，高于此值大幅减速。
       reduction_ratio_at_high_curvature: 0.5            # 高曲率时的速度降低比例。 0.5 (即减速 50%)
@@ -528,7 +545,7 @@ planner_server:
     action_server_result_timeout: 300.0  # 增加规划器超时时间
     planner_plugins: ["GridBased"]
     GridBased:
-      plugin: "nav2_theta_star_planner/ThetaStarPlanner" # In Iron and older versions, "/" was used instead of "::"
+      plugin: "nav2_theta_star_planner::ThetaStarPlanner" # Jazzy 使用 "::"
       how_many_corners: 8
       w_euc_cost: 1.0
       w_traversal_cost: 10.0
@@ -556,15 +573,15 @@ behavior_server:
     cycle_frequency: 10.0
     behavior_plugins: ["spin", "backup", "drive_on_heading", "assisted_teleop", "wait"]
     spin:
-      plugin: "nav2_behaviors/Spin"
+      plugin: "nav2_behaviors::Spin"
     backup:
       plugin: "pb_nav2_behaviors/BackUpFreeSpace"
     drive_on_heading:
-      plugin: "nav2_behaviors/DriveOnHeading"
+      plugin: "nav2_behaviors::DriveOnHeading"
     wait:
-      plugin: "nav2_behaviors/Wait"
+      plugin: "nav2_behaviors::Wait"
     assisted_teleop:
-      plugin: "nav2_behaviors/AssistedTeleop"
+      plugin: "nav2_behaviors::AssistedTeleop"
     local_frame: odom
     global_frame: map
     robot_base_frame: gimbal_yaw_fake
@@ -593,12 +610,15 @@ velocity_smoother:
   ros__parameters:
     use_sim_time: False
     smoothing_frequency: 20.0
-    scale_velocities: False
+    # True 才会按 max_velocity 缩放；否则 0.5 m/s 这类超限指令会原样下发
+    scale_velocities: True
     feedback: "OPEN_LOOP"
-    max_velocity: [2.5, 2.5, 3.0]
-    min_velocity: [-2.5, -2.5, -3.0]
-    max_accel: [4.5, 4.5, 5.0]
-    max_decel: [-4.5, -4.5, -5.0]
+    # 与底盘能力一致：0.45 m/s 前进 / 0.3 m/s 横移 / 1.0 rad/s；
+    # 加速度对应底盘斜坡 2.5 m/s^2、4.0 rad/s^2。
+    max_velocity: [0.45, 0.3, 1.0]
+    min_velocity: [-0.45, -0.3, -1.0]
+    max_accel: [2.5, 2.5, 4.0]
+    max_decel: [-2.5, -2.5, -4.0]
     odom_topic: "odometry"
     odom_duration: 0.1
     deadband_velocity: [0.0, 0.0, 0.0]

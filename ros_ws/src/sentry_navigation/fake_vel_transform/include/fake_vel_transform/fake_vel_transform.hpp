@@ -15,6 +15,7 @@
 #ifndef FAKE_VEL_TRANSFORM__FAKE_VEL_TRANSFORM_HPP_
 #define FAKE_VEL_TRANSFORM__FAKE_VEL_TRANSFORM_HPP_
 
+#include <chrono>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -63,9 +64,11 @@ private:
   std::string input_cmd_vel_topic_;
   std::string output_cmd_vel_topic_;
   float spin_speed_;
+  bool use_gimbal_ = true;
 
   std::mutex cmd_vel_mutex_;
   geometry_msgs::msg::Twist::SharedPtr latest_cmd_vel_;
+  std::chrono::steady_clock::time_point last_cmd_vel_time_;
   double current_robot_base_angle_;
   rclcpp::Time last_controller_activate_time_;
 };

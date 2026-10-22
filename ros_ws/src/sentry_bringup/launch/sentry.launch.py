@@ -42,7 +42,7 @@ def visualization_nodes(context, nav_share):
     if mode == "rviz":
         return [Node(
             package="rviz2", executable="rviz2", name="rviz2", output="screen",
-            arguments=["-d", os.path.join(nav_share, "rviz", "nav2_default_view.rviz")],
+            arguments=["-d", os.path.join(nav_share, "rviz", "nav2_compact_view.rviz")],
         )]
     if mode == "foxglove":
         # Resolve the package before any hardware starts, so a missing bridge
@@ -141,7 +141,7 @@ def generate_launch_description():
              name="nav2_container", output="screen",
              parameters=[configured_params, {"autostart": autostart}]),
         include("sentry_localization", "mapping.launch.py", {
-            "params_file": resolved_params, "use_sim_time": use_sim_time,
+            "nav2_params_file": resolved_params, "use_sim_time": use_sim_time,
             "autostart": autostart,
         }),
         include("pb2025_nav_bringup", "navigation_launch.py", {

@@ -116,6 +116,8 @@ extern "C" {
 #define ROBOT_CHASSIS_DM_MAX_WHEEL_SPEED           (ROBOT_CHASSIS_DM_MAX_RAD_S * ROBOT_CHASSIS_WHEEL_RADIUS_M * ROBOT_CHASSIS_DM_GEAR_RATIO) /**< DM 路径最大轮速，m/s。 */
 #define ROBOT_CHASSIS_DM_FB_LOST_MS                1000U                              /**< DM 反馈离线判定，单位 ms；实车测到真实间隔后再收紧。 */
 #define ROBOT_CHASSIS_DM_ENABLE_PERIOD_MS          20U                                /**< DM 运行中重发使能周期，单位 ms；左后速度目标需要使能帧刷新。 */
+#define ROBOT_CHASSIS_DM_IDLE_DISABLE_MS           300U                               /**< Stop 持续该时间后失能，消除速度模式空闲保持电流声；收到运动指令立即重新使能。 */
+#define ROBOT_CHASSIS_DM_START_RETRY_MS            500U                               /**< 启动阶段反馈未就绪时的重试周期；未就绪不锁存故障。 */
 #define ROBOT_CHASSIS_DM_DISABLE_AFTER_MS          1000U                              /**< 持续故障 1 s 后失能，单位 ms。 */
 #define ROBOT_CHASSIS_DM_STOP_PERIOD_MS            100U                               /**< 故障锁存后重发停止周期，单位 ms。 */
 #define ROBOT_CHASSIS_MAX_SPEED_X                 2.5F                               /**< 普通模式最大 vx。 */

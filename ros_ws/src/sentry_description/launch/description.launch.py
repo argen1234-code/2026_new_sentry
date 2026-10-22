@@ -28,7 +28,7 @@ def launch_setup(context: LaunchContext):
         robot_description = f.read()
 
     namespace = LaunchConfiguration("namespace")
-    params_file = LaunchConfiguration("params_file")
+    params_file = LaunchConfiguration("description_params_file")
     configured_params = ParameterFile(
         RewrittenYaml(
             source_file=params_file,
@@ -92,7 +92,7 @@ def generate_launch_description():
             description="Explicit URDF path; overrides chassis_model when non-empty",
         ),
         DeclareLaunchArgument(
-            "params_file",
+            "description_params_file",
             default_value=os.path.join(description_share, "config", "robot_state_publisher.yaml"),
         ),
         DeclareLaunchArgument(

@@ -6,7 +6,7 @@
                   number_of_retries="6">
       <PipelineSequence name="NavigateWithReplanning">
         <RateController hz="1">
-          <RecoveryNode name="ComputePathThroughPoses"
+          <RecoveryNode name="ComputePathThroughPosesRecovery"
                         number_of_retries="3">
             <ReactiveSequence>
               <RemovePassedGoals input_goals="{goals}"
