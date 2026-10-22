@@ -29,6 +29,11 @@ def generate_launch_description():
         DeclareLaunchArgument("use_sim_time", default_value="false"),
         DeclareLaunchArgument("rviz", default_value="false"),
         DeclareLaunchArgument(
+            "rviz_config",
+            default_value=rviz_config,
+            description="RViz config file; use nav2_compact_gray.rviz for the grayscale costmap palette",
+        ),
+        DeclareLaunchArgument(
             "chassis_model",
             default_value="mecanum",
             choices=["mecanum", "sentry"],
@@ -50,7 +55,7 @@ def generate_launch_description():
             name="rviz2",
             output="screen",
             condition=IfCondition(LaunchConfiguration("rviz")),
-            arguments=["-d", rviz_config],
+            arguments=["-d", LaunchConfiguration("rviz_config")],
             remappings=[("/tf", "tf"), ("/tf_static", "tf_static")],
         ),
     ])

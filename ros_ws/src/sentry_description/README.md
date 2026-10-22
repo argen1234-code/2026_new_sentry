@@ -32,7 +32,7 @@ ros2 launch sentry_description description.launch.py use_rviz:=true chassis_mode
 | `base_link` 高度 | 0.045 m（轮轴） |
 | MID360 x / y | 0.15 / 0 m |
 | MID360 离地 z | **0.21 m** |
-| MID360 yaw | -π/2（初值来自原麦轮模型，需在 RViz 验证） |
+| MID360 yaw | **0**（X 轴朝车头；实测原 -π/2 会把物理前方映射到右扇区） |
 
 TF 链：
 

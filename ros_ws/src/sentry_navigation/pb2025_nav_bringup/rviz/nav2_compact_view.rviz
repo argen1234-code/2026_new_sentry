@@ -238,8 +238,8 @@ Visualization Manager:
       Axis: Z
       Channel Name: intensity
       Class: rviz_default_plugins/LaserScan
-      Color: 255; 255; 255
-      Color Transformer: Intensity
+      Color: 0; 255; 0
+      Color Transformer: FlatColor
       Decay Time: 0
       Enabled: true
       Invert Rainbow: false
@@ -306,8 +306,8 @@ Visualization Manager:
       Axis: Z
       Channel Name: intensity
       Class: rviz_default_plugins/PointCloud2
-      Color: 255; 255; 255
-      Color Transformer: Intensity
+      Color: 0; 255; 0
+      Color Transformer: FlatColor
       Decay Time: 0
       Enabled: false
       Invert Rainbow: true
@@ -378,7 +378,7 @@ Visualization Manager:
         - Alpha: 1
           Buffer Length: 1
           Class: rviz_default_plugins/Path
-          Color: 255; 0; 0
+          Color: 240; 50; 40
           Enabled: true
           Head Diameter: 0.019999999552965164
           Head Length: 0.019999999552965164
@@ -420,7 +420,7 @@ Visualization Manager:
       Name: Global Planner
     - Class: rviz_common/Group
       Displays:
-        - Alpha: 0.699999988079071
+        - Alpha: 0.7
           Class: rviz_default_plugins/Map
           Color Scheme: costmap
           Draw Behind: false
@@ -444,7 +444,7 @@ Visualization Manager:
         - Alpha: 1
           Buffer Length: 1
           Class: rviz_default_plugins/Path
-          Color: 0; 12; 255
+          Color: 40; 120; 255
           Enabled: true
           Head Diameter: 0.30000001192092896
           Head Length: 0.20000000298023224
@@ -471,7 +471,7 @@ Visualization Manager:
           Value: true
         - Alpha: 0.800000011920929
           Class: rviz_default_plugins/PointStamped
-          Color: 204; 41; 204
+          Color: 255; 210; 0
           Enabled: true
           History Length: 1
           Name: Lookahead Point

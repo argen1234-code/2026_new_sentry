@@ -94,6 +94,11 @@ def generate_launch_description():
             DeclareLaunchArgument("prior_pcd_file", default_value=pcd_default),
             DeclareLaunchArgument("rviz", default_value="true"),
             DeclareLaunchArgument(
+                "rviz_config",
+                default_value=rviz_config,
+                description="RViz config file; use nav2_compact_gray.rviz for the grayscale costmap palette",
+            ),
+            DeclareLaunchArgument(
                 "enable_motion",
                 default_value="false",
                 description="Allow /cmd_vel to drive the chassis over USB (safety gate)",
@@ -125,7 +130,7 @@ def generate_launch_description():
                 name="rviz2",
                 output="screen",
                 condition=IfCondition(rviz),
-                arguments=["-d", rviz_config],
+                arguments=["-d", LaunchConfiguration("rviz_config")],
                 remappings=[("/tf", "tf"), ("/tf_static", "tf_static")],
             ),
         ]

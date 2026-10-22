@@ -435,8 +435,8 @@ local_costmap:
         z_voxels: 16
         min_obstacle_height: 0.05
         max_obstacle_height: 1.0
-        min_obstacle_intensity: 0.5
-        max_obstacle_intensity: 1.8
+        min_obstacle_intensity: 0.0
+        max_obstacle_intensity: 5.0
         use_footprint_filter: false  # 不需要，terrain_analysis_ext已在源头过滤
         footprint_padding: 0.03     # footprint外扩3cm
         observation_sources: terrain_map
@@ -450,7 +450,7 @@ local_costmap:
           max_obstacle_height: 1.0
           obstacle_max_range: 4.0
           obstacle_min_range: 0.0  # 不需要，terrain_analysis_ext已在源头过滤
-          observation_persistence: 0.5  # 0.0=只依赖当前帧，清地图后不会被历史数据重新填入
+          observation_persistence: 1.5  # terrain 的 intensity 是高度差，不能当反射率过滤
           clearing: true  # 启用清除功能，当视野内没有障碍物时清除该区域
           raytrace_max_range: 4.0  # 光线追踪最大范围，用于清除障碍物
           raytrace_min_range: 0.0
@@ -462,7 +462,7 @@ local_costmap:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 5.0
         inflation_radius: 0.35  # 圆半径0.28m + 0.07m安全余量
-      always_send_full_costmap: False
+      always_send_full_costmap: True
 
 global_costmap:
   global_costmap:
@@ -495,8 +495,8 @@ global_costmap:
         z_voxels: 16
         min_obstacle_height: 0.0
         max_obstacle_height: 1.0
-        min_obstacle_intensity: 0.5
-        max_obstacle_intensity: 1.5
+        min_obstacle_intensity: 0.0
+        max_obstacle_intensity: 5.0
         use_footprint_filter: true  # 不需要，terrain_analysis_ext已在源头过滤
         footprint_padding: 0.03     # footprint外扩3cm
         observation_sources: terrain_map_ext
@@ -510,7 +510,7 @@ global_costmap:
           max_obstacle_height: 1.0
           obstacle_max_range: 10.0
           obstacle_min_range: 0.0  # 不需要，terrain_analysis_ext已在源头过滤
-          observation_persistence: 0.5  # 0.0=只依赖当前帧，清地图后不会被历史数据重新填入
+          observation_persistence: 1.5  # terrain 的 intensity 是高度差，不能当反射率过滤
           clearing: true  # 启用清除功能，当视野内没有障碍物时清除该区域
           raytrace_max_range: 10.0  # 光线追踪最大范围，用于清除障碍物
           raytrace_min_range: 0.0
@@ -521,7 +521,7 @@ global_costmap:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 5.0
         inflation_radius: 0.35  # 圆半径0.28m + 0.07m安全余量
-      always_send_full_costmap: False
+      always_send_full_costmap: True
 
 # The yaml_filename does not need to be specified since it going to be set by defaults in launch.
 # If you'd rather set it in the yaml, remove the default "map" value in the tb3_simulation_launch.py

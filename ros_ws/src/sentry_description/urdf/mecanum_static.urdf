@@ -11,7 +11,7 @@
     base_link_z       = 0.045 m (wheel axle height)
     mid360_x/y        = 0.15 / 0.0 m
     mid360_ground_z   = 0.21 m  -> relative to base_link: 0.165 m
-    mid360_yaw        = -pi/2 (from the original mecanum laser_frame; verify in RViz)
+    mid360_yaw        = 0 (MID360 X 轴朝车头；实测原 -pi/2 会把前方偏到右扇区)
 
   All joints are fixed: this is a static TF/visual description, not a
   simulation or ros2_control model. Keep the frame names base_footprint,
@@ -187,7 +187,7 @@
   <joint name="front_mid360_joint" type="fixed">
     <parent link="gimbal_yaw"/>
     <child link="front_mid360"/>
-    <origin xyz="0.15 0 0.165" rpy="0 0 -1.57079632679"/>
+    <origin xyz="0.15 0 0.165" rpy="0 0 0"/>
   </joint>
 
 </robot>

@@ -17,7 +17,7 @@
 | 轮心 y | ±0.1362 m | URDF |
 | 中心距 L/2+W/2 | 0.3077 m | `ROBOT_CHASSIS_CENTER_DIST` |
 | 底盘外形 | 0.450 × 0.250 × 0.086 m | URDF |
-| 雷达安装 | x=0.15, y=0, 离地 0.21 m，yaw=-90°（**待实测**） | URDF |
+| 雷达安装 | x=0.15, y=0, 离地 0.21 m，yaw=0（X 轴朝车头，已实测） | URDF |
 | 底盘控制周期 | 5 ms / 200 Hz | `sentry_2026_param.h` |
 | DM 使能重发 | 20 ms | 同上 |
 | 反馈丢失/故障失能 | 1000 ms / 1000 ms | 同上 |
@@ -302,8 +302,9 @@ MID360 安装位姿变化后，`terrainUnderVehicle`、`minRelZ/maxRelZ`、
 9. **`map_saver` 启动竞态**
    高负载时 lifecycle_manager 可能在 `map_saver` 就绪前配置失败；
    不影响导航，保存地图用 `map_saver_cli` 即可。
-10. **MID360 yaw 未实测**
-    URDF 里 `front_mid360` yaw=-90° 来自旧模型；换车后必须用 RViz 确认方向。
+10. **MID360 yaw 已实测修正**
+    原 `front_mid360` yaw=-90° 来自旧 2D 雷达模型，实测会把物理前方映射到右扇区；
+    已改为 **0°**。换车或重新安装雷达后，用“左右后近、前方远”的扇区距离重新确认。
 11. **重复启动会留下孤儿节点**
     多次 kill/重启后可能同时存在**多个** `usb_bridge` 和 `cmd_vel_to_unified`。
     不同实例的 `enable_motion` 不同，会在 `/unified_cmd` 上交替发 NoFollow/Stop，
@@ -315,10 +316,17 @@ MID360 安装位姿变化后，`terrainUnderVehicle`、`minRelZ/maxRelZ`、
 12. **RViz launch 参数名冲突**
     `lidar.launch.py` 原来也声明 `rviz`，上层 `rviz:=true` 会让它再开一个窗口；
     已改名 `lidar_rviz`。**新增 launch 参数不要用 `rviz`、`params_file` 这类通用名。**
-13. **小屏 RViz 窗口**
+13. **小屏 RViz 窗口与配色**
     1024×600 屏幕上 Nav2 默认面板的最小高度 >1100 px。已新增
     `rviz/nav2_compact_view.rviz`（只保留 Displays，1000×520），
     并由 `rviz_navigation` / `mapping` / `sentry` 默认使用。
+    - 配色参照 `2026_robot_base/robot_base.rviz`，只改颜色值：
+      全局路径 `240;50;40`、局部路径 `40;120;255`、扫描 `0;255;0`；
+      代价地图仍用标准 `costmap` 配色（与参考工程方案相同）。
+      透明度、QoS、线宽/线型、显示项均保持默认。
+    - 灰度代价地图备选：`rviz/nav2_compact_gray.rviz`
+      （代价地图用 `map` 配色，无青色/品红）
+    - 两个入口都支持 `rviz_config:=<path>` 覆盖
     需要完整面板时手动用 `nav2_default_view.rviz`。
 14. **空闲失能会让电机停止上报反馈**
     DM 速度模式失能后反馈消失，原“反馈丢失 1 s 锁存”会误判。

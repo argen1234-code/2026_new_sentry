@@ -10,7 +10,7 @@ loam_interface:
 terrain_analysis:
   ros__parameters:
     scanVoxelSize: 0.05
-    decayTime: 0.5
+    decayTime: 1.0
     noDecayDis: 0.0
     clearingDis: 0.35
     useSorting: true
