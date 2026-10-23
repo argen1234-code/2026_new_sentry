@@ -21,9 +21,9 @@ CMakeCache.txt
 CMakeFiles/
 
 # ---- STM32 / Keil ----
-stm32_ws/Boards/MDK-ARM/Objects/
-stm32_ws/Boards/MDK-ARM/Listings/
-stm32_ws/Boards/MDK-ARM/DebugConfig/
+stm32_ws/legacy/Boards/MDK-ARM/Objects/
+stm32_ws/legacy/Boards/MDK-ARM/Listings/
+stm32_ws/legacy/Boards/MDK-ARM/DebugConfig/
 *.uvguix.*
 *.uvoptx
 *.uvprojx.bak
@@ -41,6 +41,8 @@ stm32_ws/Boards/MDK-ARM/DebugConfig/
 *.htm
 *.lnp
 *.sct
+# 上游 sentinel 工程自带 scatter 文件，必须随源码保留
+!stm32_ws/sentinel/MDK-ARM/**/*.sct
 
 # ---- IDE / OS ----
 .vscode/
@@ -50,5 +52,7 @@ Thumbs.db
 
 # ---- 本地下载与机器专属文件 ----
 .downloads/
+# 母工程参考代码（对比基线，不随本仓库提交）
+reference/
 stm32_ws/backup/
 *.local
