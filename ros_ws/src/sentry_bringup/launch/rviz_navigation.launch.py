@@ -105,9 +105,9 @@ def generate_launch_description():
             ),
             DeclareLaunchArgument(
                 "chassis_model",
-                default_value="mecanum",
-                choices=["mecanum", "sentry"],
-                description="Static chassis model: mecanum training car or sentry steering car",
+                default_value="omni_round",
+                choices=["sentry_2026", "mecanum", "sentry", "omni_round"],
+                description="Static chassis model: official 2026, mecanum training car, earlier steering sentry, or round omni chassis",
             ),
             include("sentry_hardware", "lidar.launch.py", {"frame_id": "front_mid360"}),
             include("usb_bridge", "usb_bridge.launch.py", {

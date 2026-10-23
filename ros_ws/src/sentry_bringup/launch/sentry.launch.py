@@ -90,9 +90,9 @@ def generate_launch_description():
         DeclareLaunchArgument("autostart", default_value="true"),
         DeclareLaunchArgument(
             "chassis_model",
-            default_value="mecanum",
-            choices=["mecanum", "sentry"],
-            description="Static chassis model: mecanum training car or sentry steering car",
+            default_value="omni_round",
+            choices=["sentry_2026", "mecanum", "sentry", "omni_round"],
+            description="Static chassis model: official 2026, mecanum training car, earlier steering sentry, or round omni chassis",
         ),
         DeclareLaunchArgument(
             "chassis_transport",
@@ -120,6 +120,16 @@ def generate_launch_description():
         DeclareLaunchArgument("foxglove_port", default_value="8765"),
         DeclareLaunchArgument("udp_port", default_value="19002"),
         DeclareLaunchArgument("referee_device", default_value="/dev/ttyACM0"),
+        DeclareLaunchArgument(
+            "map",
+            default_value=os.path.join(nav_share, "map", "reality", "lab.yaml"),
+            description="2D occupancy map for map_server and the costmap static layer",
+        ),
+        DeclareLaunchArgument(
+            "prior_pcd_file",
+            default_value=os.path.join(nav_share, "pcd", "reality", "lab.pcd"),
+            description="Prior PCD used by small_gicp for relocalization",
+        ),
         OpaqueFunction(function=visualization_nodes, args=[nav_share]),
         # Keep the description RViz disabled without overwriting this
         # bringup's own use_rviz launch configuration.
@@ -140,9 +150,12 @@ def generate_launch_description():
         Node(package="rclcpp_components", executable="component_container_isolated",
              name="nav2_container", output="screen",
              parameters=[configured_params, {"autostart": autostart}]),
-        include("sentry_localization", "mapping.launch.py", {
-            "nav2_params_file": resolved_params, "use_sim_time": use_sim_time,
-            "autostart": autostart,
+        # Localization, not mapping: GICP matches against the prior PCD and the
+        # 2D map comes from map_server.  Real-time mapping runs through
+        # sentry_bringup/mapping.launch.py (teleop mapping) instead.
+        include("sentry_localization", "localization.launch.py", {
+            "map": LaunchConfiguration("map"),
+            "prior_pcd_file": LaunchConfiguration("prior_pcd_file"),
         }),
         include("pb2025_nav_bringup", "navigation_launch.py", {
             "params_file": resolved_params, "use_sim_time": use_sim_time,

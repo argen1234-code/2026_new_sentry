@@ -12,7 +12,9 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument("prior_pcd_file", default_value=""),
         DeclareLaunchArgument("map", default_value=""),
-        Node(package="point_lio", executable="pointlio_mapping", name="point_lio", output="screen", parameters=[point_lio, {"prior_pcd.enable": True, "prior_pcd.prior_pcd_map_path": LaunchConfiguration("prior_pcd_file")}]),
+        # pcd_save 只在建图入口打开：导航时打开会一直把全分辨率点云攒在内存里，
+        # 退出时还覆盖 PCD/scans.pcd。
+        Node(package="point_lio", executable="pointlio_mapping", name="point_lio", output="screen", parameters=[point_lio, {"prior_pcd.enable": False, "prior_pcd.prior_pcd_map_path": LaunchConfiguration("prior_pcd_file"), "pcd_save.pcd_save_en": False}]),
         Node(package="nav2_map_server", executable="map_server", name="map_server", output="screen", parameters=[{"yaml_filename": LaunchConfiguration("map"), "use_sim_time": False}]),
         Node(package="small_gicp_relocalization", executable="small_gicp_relocalization_node", name="small_gicp_relocalization", output="screen", parameters=[gicp, {"prior_pcd_file": LaunchConfiguration("prior_pcd_file")}]),
         Node(package="nav2_lifecycle_manager", executable="lifecycle_manager", name="lifecycle_manager_localization", output="screen", parameters=[{"autostart": True, "node_names": ["map_server"]}]),

@@ -39,8 +39,9 @@ void IntensityVoxelLayer::onInitialize()
     node->get_parameter(name_ + ".footprint_clearing_enabled").as_bool();
   enabled_ = node->get_parameter(name_ + ".enabled").as_bool();
   max_obstacle_height_ = node->get_parameter(name_ + ".max_obstacle_height").as_double();
-  combination_method_ =
-    combination_method_from_int(node->get_parameter(name_ + ".combination_method").as_int());
+  // Humble 中 combination_method_ 是 int；Jazzy 才引入 CombinationMethod 枚举。
+  combination_method_ = static_cast<int>(
+    node->get_parameter(name_ + ".combination_method").as_int());
 
   size_z_ = node->declare_parameter(name_ + ".z_voxels", 16);
   origin_z_ = node->declare_parameter(name_ + ".origin_z", 16.0);

@@ -23,6 +23,7 @@ setup(
         'console_scripts': [
             'usb_bridge = usb_bridge.usb_bridge_node:main',
             'cmd_vel_to_unified = usb_bridge.cmd_vel_to_unified:main',
+            'keyboard_teleop = usb_bridge.keyboard_teleop:main',
         ],
     },
 )

@@ -1,7 +1,12 @@
-"""Publish the competition robot TF tree from the URDF exported by SolidWorks."""
+"""Publish the robot TF tree.
+
+`chassis_model` selects one of the bundled descriptions; `.xacro` files are
+expanded here, plain `.urdf` files are read as-is.
+"""
 
 import os
 
+import xacro
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchContext, LaunchDescription
 from launch.actions import DeclareLaunchArgument, GroupAction, OpaqueFunction
@@ -14,18 +19,29 @@ from nav2_common.launch import RewrittenYaml
 
 def launch_setup(context: LaunchContext):
     description_share = get_package_share_directory("sentry_description")
-    chassis_model = context.launch_configurations.get("chassis_model", "mecanum")
+    chassis_model = context.launch_configurations.get("chassis_model", "sentry_2026")
     override = context.launch_configurations.get("robot_description_file", "")
 
+    models = {
+        # 2026 official chassis + gimbal export (default).
+        "sentry_2026": "sentry_2026_static.urdf",
+        # Previous mecanum training car, kept as a fallback.
+        "mecanum": "mecanum_static.urdf",
+        # Earlier steering-wheel sentry export, kept as a fallback.
+        "sentry": "robot.urdf",
+        # Round four-omni-wheel chassis used with chassis_fw.
+        "omni_round": "omni_round.urdf.xacro",
+    }
     if override:
         urdf_path = override
-    elif chassis_model == "sentry":
-        urdf_path = os.path.join(description_share, "urdf", "robot.urdf")
     else:
-        urdf_path = os.path.join(description_share, "urdf", "mecanum_static.urdf")
+        urdf_path = os.path.join(description_share, "urdf", models[chassis_model])
 
-    with open(urdf_path, "r", encoding="utf-8") as f:
-        robot_description = f.read()
+    if urdf_path.endswith((".xacro", ".urdf.xacro")):
+        robot_description = xacro.process_file(urdf_path).toxml()
+    else:
+        with open(urdf_path, "r", encoding="utf-8") as f:
+            robot_description = f.read()
 
     namespace = LaunchConfiguration("namespace")
     params_file = LaunchConfiguration("description_params_file")
@@ -82,9 +98,12 @@ def generate_launch_description():
         DeclareLaunchArgument("use_sim_time", default_value="false"),
         DeclareLaunchArgument(
             "chassis_model",
-            default_value="mecanum",
-            choices=["mecanum", "sentry"],
-            description="Static robot model: mecanum training chassis or sentry steering chassis",
+            default_value="omni_round",
+            choices=["sentry_2026", "mecanum", "sentry", "omni_round"],
+            description=(
+                "Static robot model: 2026 official chassis, mecanum training chassis, "
+                "the earlier steering sentry, or the round omni chassis"
+            ),
         ),
         DeclareLaunchArgument(
             "robot_description_file",

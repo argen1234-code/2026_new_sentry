@@ -2,6 +2,11 @@
 
 > 适用：当前 `2026_new_sentry` 工程里的 ROS 2 导航栈与 STM32 固件。
 > 目标：把“麦轮训练车”上验证过的建图/导航链路，迁移到正式底盘时知道**改哪里、为什么改、怎么验收**。
+>
+> 分支说明：本文档最初按桌面 Ubuntu 24.04 / ROS 2 Jazzy 记录；微型主机侧
+> （`feature/humble-official-chassis`）为 Ubuntu 22.04 / ROS 2 Humble，
+> 命令中的 `jazzy` 请替换成 `humble`，Nav2 接口差异见 `ros_ws/README.md`
+> 的 Humble 适配表。
 
 ---
 
@@ -22,7 +27,7 @@
 | DM 使能重发 | 20 ms | 同上 |
 | 反馈丢失/故障失能 | 1000 ms / 1000 ms | 同上 |
 | 有效基础速度 | **0.45 m/s 前进 / 0.3 m/s 横移 / 1.0 rad/s** | USB 桥钳位 + 已验证 10 rad/s 轮速 |
-| 固件 target | `sentry_2026_chassis` | `stm32_ws/Robot/Sentry/` |
+| 固件 target | `sentry_2026_chassis` | `stm32_ws/legacy/Robot/Sentry/` |
 | USB | CDC `0483:5740`，`AA 55 | id | seq | len | payload | xor` | `docs/protocol.md` |
 
 > 注意：`ROBOT_CHASSIS_MAX_SPEED_X/Y` 目前仍是 2.5 m/s，那是固件内部上限；
@@ -83,32 +88,32 @@ map → odom → base_footprint → base_link → gimbal_yaw → gimbal_yaw_fake
 
 ### 3.1 机械 / URDF
 
-文件：`ros_ws/src/sentry_description/urdf/mecanum_static.urdf`
+默认模型：`ros_ws/src/sentry_description/urdf/sentry_2026_static.urdf`
+（2026 正式底盘 + 四轴云台导出，`chassis_model:=sentry_2026`）。
+旧训练车模型 `mecanum_static.urdf`（`chassis_model:=mecanum`）和更早的
+舵轮模型 `robot.urdf`（`chassis_model:=sentry`）保留为备用。
 
-必须更新：
+2026 模型里必须更新：
 
 | 参数 | 位置 |
 |---|---|
-| 轮半径、轮宽 | 4 个 `<link name="wheel_*">` 的 geometry + joint origin |
-| 轮心 x/y | 4 个 wheel joint 的 `<origin xyz>` |
-| 底盘外形 | `base_link` visual/collision box |
-| `base_link` 高度 | `base_footprint→base_link` 的 z |
-| MID360 x/y/z | `front_mid360_joint` 的 origin（z 是**相对 base_link**，不是离地高度） |
-| MID360 yaw | `front_mid360_joint` 的 rpy |
+| `base_footprint` 离地高度 | `base_footprint_to_base_link` 的 z（当前假设 CAD 原点在地面，取 0） |
+| 雷达位姿 | `joint_ref_lidar` 的 origin/rpy（当前 x=0.0603, y=-0.1143, z=0.1139 相对 `link2_laser`，pitch 22°） |
+| 云台 yaw 轴位置 | `joint1_big_yaw` 的 origin |
 
 **帧名不要改**：`base_footprint`、`base_link`、`gimbal_yaw`、`front_mid360`、`imu_link`。
-Nav2、Point-LIO、terrain、USB 桥都按这些名字引用。
+Nav2、Point-LIO、terrain、USB 桥都按这些名字引用（导出里的 `base`、
+`link1_big_yaw`、`ref_lidar` 已分别改名）。
 
-如果正式底盘是舵轮/云台车，用 `chassis_model:=sentry` 切换到 `urdf/robot.urdf`，
-或新建一份 URDF 并用 `robot_description_file:=<path>` 指定。
+若再换一版模型，直接新建 URDF 并用 `robot_description_file:=<path>` 指定。
 
 ### 3.2 STM32 固件
 
 文件：
 
-- `stm32_ws/Robot/Sentry/sentry_2026_chassis.h`（target 选择）
-- `stm32_ws/Robot/Sentry/sentry_2026_param.h`（参数）
-- `stm32_ws/Component/Controller/Chassis/Src/chassis_mecanum.c`（运动学）
+- `stm32_ws/legacy/Robot/Sentry/sentry_2026_chassis.h`（target 选择）
+- `stm32_ws/legacy/Robot/Sentry/sentry_2026_param.h`（参数）
+- `stm32_ws/legacy/Component/Controller/Chassis/Src/chassis_mecanum.c`（运动学）
 
 需要改：
 
@@ -162,8 +167,8 @@ Nav2、Point-LIO、terrain、USB 桥都按这些名字引用。
 
 | 参数 | 当前值 | 换车时 |
 |---|---|---|
-| `local_costmap.robot_radius` | 0.28 | 新外接圆半径 |
-| `global_costmap.robot_radius` | 0.28 | 同上 |
+| `local_costmap.robot_radius` | 0.26 | 新外接圆半径 |
+| `global_costmap.robot_radius` | 0.26 | 同上 |
 | `inflation_radius` | 0.35 | 半径 + 安全余量 |
 | `footprint_padding` | 0.03 | 同上 |
 | `velocity_smoother.max_velocity` | `[0.45, 0.3, 1.0]` | 新底盘速度上限 |
@@ -172,7 +177,7 @@ Nav2、Point-LIO、terrain、USB 桥都按这些名字引用。
 | `controller_server.v_linear/v_angular` | ±0.45 / ±1.0 | 新上限 |
 | `goal_checker.xy/yaw` | 0.2 m / 0.3 rad | 按车体尺寸 |
 | costmap `min/max_obstacle_height` | 0.0–1.0 m | 新车体高度 |
-| `terrainUnderVehicle` | -0.22 | 新雷达离地高度 |
+| `terrainUnderVehicle` | -0.12 | 新雷达离地高度（点云实测，取负值） |
 | `minRelZ/maxRelZ/lowerBoundZ/upperBoundZ` | -0.35/0.8, -0.6/0.8 | 重新标定 |
 | `pointcloud_to_laserscan.min_height/max_height` | 0.08 / 1.0 | 重新标定 |
 | `fake_vel_transform.use_gimbal` | `False` | 正式云台车改 `True` |
@@ -214,8 +219,12 @@ MID360 安装位姿变化后，`terrainUnderVehicle`、`minRelZ/maxRelZ`、
    - 正式车应改成本地 `云台相对底盘 yaw`（来自云台电机/编码器），
      否则会像麦轮车一样被车体 yaw 误旋转。上真车前必须复核这段逻辑。
 3. **URDF 切换**
-   - `chassis_model:=sentry` 或新 URDF；
-   - `gimbal_yaw` 必须是可动关节，并接入真实关节状态。
+   - 默认已改为圆形全向轮模型 `chassis_model:=omni_round`
+     （`urdf/omni_round.urdf.xacro`）；2026 模型仍可用
+     `chassis_model:=sentry_2026` 切回；
+   - 新模型的 `gimbal_yaw` 固定在 `base_link`（本车无云台），`imu_link`
+     与 `base_link` 重合，两者都是为了满足 Nav2 / usb_bridge 的帧名；
+   - 云台反馈接入后要把 `gimbal_yaw` 改成可动关节。
 4. **`robot_base_frame`**
    - costmap / behavior 继续用 `gimbal_yaw_fake`；
    - Nav2 planning 使用 `gimbal_yaw`。
@@ -282,9 +291,22 @@ MID360 安装位姿变化后，`terrainUnderVehicle`、`minRelZ/maxRelZ`、
    全局配置只保留第一次声明，导致 Point-LIO 拿到错误的 YAML 并 SIGSEGV。
    现已改名为 `description_params_file` / `nav2_params_file`。
    **新增 launch 参数时避免通用名。**
-2. **插件分隔符**
-   Nav2 Jazzy 的插件类名用 `::`（如 `nav2_theta_star_planner::ThetaStarPlanner`）；
-   自定义 `pb_nav2_behaviors/BackUpFreeSpace` 仍用 `/`（该包注册方式不同）。
+2. **插件分隔符必须与插件 XML 的注册名一致**
+   本机 nav2 是 1.1.20（Humble），pluginlib 按插件 XML 里的 `name` 查找，**没有**跨版本兼容：
+   - XML 带 `name=` 的包（`nav2_theta_star_planner`、`nav2_behaviors`、`nav2_smac_planner`、
+     `nav2_navfn_planner`、`pb_nav2_plugins` 的 behavior）必须写成 `/`：
+     `nav2_theta_star_planner/ThetaStarPlanner`、`nav2_behaviors/Spin`、
+     `pb_nav2_behaviors/BackUpFreeSpace`。
+   - XML 只有 `type=` 的包（`nav2_costmap_2d`、`nav2_controller`、`nav2_smoother`、
+     `nav2_waypoint_follower`、`pb_omni_pid_pursuit_controller`、`pb_nav2_plugins` 的
+     costmap）用 `::`。
+
+   写成 `nav2_theta_star_planner::ThetaStarPlanner` 会 FATAL：
+   `planner_server: Failed to create global planner ... does not exist`，
+   `lifecycle_manager_navigation: Failed to bring up all requested nodes. Aborting bringup`。
+   **症状是 RViz 里设目标点没任何反应**（Nav2 全部停留在 unconfigured/inactive），
+   而且 1–2 分钟后容器会以 `exit code -6` 退出。查这个问题先看
+   `~/.ros/log/latest/component_container_isolated_*.log`。
 3. **`plugin_lib_names` 位置**
    Jazzy 1.3.13 下放在 `bt_navigator` 根节点会被注册两次（`ID [ComputePathToPose] already registered`）。
    必须放在 **`navigate_to_pose.plugin_lib_names`** 下。
@@ -382,7 +404,7 @@ MID360 安装位姿变化后，`terrainUnderVehicle`、`minRelZ/maxRelZ`、
 
 ```bash
 cd ~/2026_new_sentry/ros_ws
-source /opt/ros/jazzy/setup.bash
+source /opt/ros/humble/setup.bash
 source install/setup.bash
 ros2 launch sentry_bringup mapping.launch.py rviz:=true
 ```

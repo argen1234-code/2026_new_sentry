@@ -8,7 +8,11 @@ usb_bridge:
     tx_period: 0.02
     poll_period: 0.005
     link_timeout: 1.0
-    # Dynamic wheel state: MCU order RR, FL, RL, FR.
-    wheel_radius: 0.045
-    wheel_position_wrap_rad: 25.0
+    # Dynamic wheel state. 0x83 slot order from chassis_fw:
+    # [后 205, 右 206, 前 207, 左 208]; joint names keep the ROS-side order.
+    # wheel_radius must match chassis_fw's MPS_to_RPM (0.075 m wheel).
+    wheel_radius: 0.075
+    # chassis_fw sends the output-shaft single-turn angle, which wraps every
+    # 2*pi/19.2032 = 0.3272 rad instead of 2*pi.
+    wheel_position_wrap_rad: 0.3272
     wheel_joint_signs: [-1.0, 1.0, 1.0, -1.0]

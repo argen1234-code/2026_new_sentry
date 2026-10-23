@@ -20,6 +20,9 @@ namespace pb_nav2_behaviors
 
 void BackUpFreeSpace::onConfigure()
 {
+  // 先让基类声明 simulate_ahead_time 等参数，isCollisionFree() 依赖它。
+  nav2_behaviors::DriveOnHeading<BackUpAction>::onConfigure();
+
   auto node = node_.lock();
   if (!node) {
     throw std::runtime_error{"Failed to lock node"};
@@ -51,18 +54,17 @@ void BackUpFreeSpace::onCleanup()
   marker_pub_.reset();
 }
 
-nav2_behaviors::ResultStatus BackUpFreeSpace::onRun(
+nav2_behaviors::Status BackUpFreeSpace::onRun(
   const std::shared_ptr<const BackUpAction::Goal> command)
 {
   // First, stop the robot before starting backup behavior
   stopRobot();
   RCLCPP_INFO(logger_, "Stopped robot before starting backup behavior");
-  
+
   while (!costmap_client_->wait_for_service(std::chrono::seconds(1))) {
     if (!rclcpp::ok()) {
       RCLCPP_ERROR(logger_, "Interrupted while waiting for the service. Exiting.");
-      return nav2_behaviors::ResultStatus{
-        nav2_behaviors::Status::FAILED, BackUpAction::Result::UNKNOWN};
+      return nav2_behaviors::Status::FAILED;
     }
     RCLCPP_WARN(logger_, "service not available, waiting again...");
   }
@@ -71,8 +73,7 @@ nav2_behaviors::ResultStatus BackUpFreeSpace::onRun(
   auto result = costmap_client_->async_send_request(request);
   if (result.wait_for(std::chrono::seconds(1)) == std::future_status::timeout) {
     RCLCPP_ERROR(logger_, "Interrupted while waiting for the service. Exiting.");
-    return nav2_behaviors::ResultStatus{
-      nav2_behaviors::Status::FAILED, BackUpAction::Result::UNKNOWN};
+    return nav2_behaviors::Status::FAILED;
   }
 
   // get costmap
@@ -81,8 +82,7 @@ nav2_behaviors::ResultStatus BackUpFreeSpace::onRun(
   if (!nav2_util::getCurrentPose(
         initial_pose_, *tf_, global_frame_, robot_base_frame_, transform_tolerance_)) {
     RCLCPP_ERROR(logger_, "Initial robot pose is not available.");
-    return nav2_behaviors::ResultStatus{
-      nav2_behaviors::Status::FAILED, BackUpAction::Result::TF_ERROR};
+    return nav2_behaviors::Status::FAILED;
   }
 
   // get current pose
@@ -105,17 +105,15 @@ nav2_behaviors::ResultStatus BackUpFreeSpace::onRun(
   if (!nav2_util::getCurrentPose(
         initial_pose_, *tf_, global_frame_, robot_base_frame_, transform_tolerance_)) {
     RCLCPP_ERROR(logger_, "Initial robot pose is not available.");
-    return nav2_behaviors::ResultStatus{
-      nav2_behaviors::Status::FAILED, BackUpAction::Result::TF_ERROR};
+    return nav2_behaviors::Status::FAILED;
   }
   RCLCPP_WARN(
     logger_, "backing up %f meters towards free space at angle %f", command_x_, best_angle);
 
-  return nav2_behaviors::ResultStatus{
-    nav2_behaviors::Status::SUCCEEDED, BackUpAction::Result::NONE};
+  return nav2_behaviors::Status::SUCCEEDED;
 }
 
-nav2_behaviors::ResultStatus BackUpFreeSpace::onCycleUpdate()
+nav2_behaviors::Status BackUpFreeSpace::onCycleUpdate()
 {
   rclcpp::Duration time_remaining = end_time_ - clock_->now();
   if (time_remaining.seconds() < 0.0 && command_time_allowance_.seconds() > 0.0) {
@@ -124,16 +122,14 @@ nav2_behaviors::ResultStatus BackUpFreeSpace::onCycleUpdate()
       logger_,
       "Exceeded time allowance before reaching the "
       "DriveOnHeading goal - Exiting DriveOnHeading");
-    return nav2_behaviors::ResultStatus{
-      nav2_behaviors::Status::FAILED, BackUpAction::Result::TIMEOUT};
+    return nav2_behaviors::Status::FAILED;
   }
 
   geometry_msgs::msg::PoseStamped current_pose;
   if (!nav2_util::getCurrentPose(
         current_pose, *tf_, global_frame_, robot_base_frame_, transform_tolerance_)) {
     RCLCPP_ERROR(logger_, "Current robot pose is not available.");
-    return nav2_behaviors::ResultStatus{
-      nav2_behaviors::Status::FAILED, BackUpAction::Result::TF_ERROR};
+    return nav2_behaviors::Status::FAILED;
   }
 
   float diff_x = initial_pose_.pose.position.x - current_pose.pose.position.x;
@@ -145,32 +141,27 @@ nav2_behaviors::ResultStatus BackUpFreeSpace::onCycleUpdate()
 
   if (distance >= std::fabs(command_x_)) {
     stopRobot();
-    return nav2_behaviors::ResultStatus{
-      nav2_behaviors::Status::SUCCEEDED, BackUpAction::Result::NONE};
+    return nav2_behaviors::Status::SUCCEEDED;
   }
 
-  auto cmd_vel = std::make_unique<geometry_msgs::msg::TwistStamped>();
-  cmd_vel->header.stamp = clock_->now();
-  cmd_vel->header.frame_id = robot_base_frame_;
-  cmd_vel->twist.linear.y = twist_y_;
-  cmd_vel->twist.linear.x = twist_x_;
+  auto cmd_vel = std::make_unique<geometry_msgs::msg::Twist>();
+  cmd_vel->linear.y = twist_y_;
+  cmd_vel->linear.x = twist_x_;
 
   geometry_msgs::msg::Pose2D pose;
   pose.x = current_pose.pose.position.x;
   pose.y = current_pose.pose.position.y;
   pose.theta = tf2::getYaw(current_pose.pose.orientation);
 
-  if (!isCollisionFree(distance, cmd_vel->twist, pose)) {
+  if (!isCollisionFree(distance, cmd_vel.get(), pose)) {
     stopRobot();
     RCLCPP_WARN(logger_, "Collision Ahead - Exiting DriveOnHeading");
-    return nav2_behaviors::ResultStatus{
-      nav2_behaviors::Status::FAILED, BackUpAction::Result::COLLISION_AHEAD};
+    return nav2_behaviors::Status::FAILED;
   }
 
   vel_pub_->publish(std::move(cmd_vel));
 
-  return nav2_behaviors::ResultStatus{
-    nav2_behaviors::Status::RUNNING, BackUpAction::Result::NONE};
+  return nav2_behaviors::Status::RUNNING;
 }
 
 float BackUpFreeSpace::findBestDirection(

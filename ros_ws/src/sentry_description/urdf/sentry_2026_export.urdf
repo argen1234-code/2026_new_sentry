@@ -1,0 +1,178 @@
+<?xml version="1.0" encoding="utf-8"?>
+<robot name="sentry">
+
+  <link name="base">
+    <visual>
+      <origin xyz="-1.288000 0.103120 0.094410" rpy="1.570796 -0.000000 1.570796"/>
+      <geometry>
+        <mesh filename="mesh/base.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="-1.288000 0.103120 0.094410" rpy="1.570796 -0.000000 1.570796"/>
+      <geometry>
+        <mesh filename="mesh/base.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <origin xyz="-0.004137 -0.004036 0.103555" rpy="0 0 0"/>
+      <mass value="2.380349"/>
+      <inertia ixx="8.547636288e-02" ixy="1.498436180e-03" ixz="8.028297299e-05" iyy="8.554787089e-02" iyz="7.119581530e-05" izz="1.637898107e-01"/>
+    </inertial>
+  </link>
+
+  <link name="link1_big_yaw">
+    <visual>
+      <origin xyz="-1.288000 0.103120 0.004310" rpy="1.570796 -0.000000 1.570796"/>
+      <geometry>
+        <mesh filename="mesh/link1_big_yaw.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="-1.288000 0.103120 0.004310" rpy="1.570796 -0.000000 1.570796"/>
+      <geometry>
+        <mesh filename="mesh/link1_big_yaw.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <origin xyz="-0.094538 0.007156 0.099200" rpy="0 0 0"/>
+      <mass value="2.114516"/>
+      <inertia ixx="3.660210260e-02" ixy="-2.561411578e-03" ixz="1.111655700e-03" iyy="1.343427679e-02" iyz="-1.556263129e-03" izz="4.512037122e-02"/>
+    </inertial>
+  </link>
+
+  <link name="link2_laser">
+    <visual>
+      <origin xyz="-1.288000 0.103120 0.004310" rpy="1.570796 -0.000000 1.570796"/>
+      <geometry>
+        <mesh filename="mesh/link2_laser.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="-1.288000 0.103120 0.004310" rpy="1.570796 -0.000000 1.570796"/>
+      <geometry>
+        <mesh filename="mesh/link2_laser.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <origin xyz="0.061051 -0.107827 0.097752" rpy="0 0 0"/>
+      <mass value="0.265000"/>
+      <inertia ixx="3.566995800e+02" ixy="7.026011172e+00" ixz="-1.303453954e+01" iyy="4.021900212e+02" iyz="-8.635832677e+01" izz="5.841296041e+02"/>
+    </inertial>
+  </link>
+
+  <link name="link3_roll">
+    <visual>
+      <origin xyz="-1.318316 0.107696 -0.043840" rpy="1.570796 -0.000000 1.570796"/>
+      <geometry>
+        <mesh filename="mesh/link3_roll.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="-1.318316 0.107696 -0.043840" rpy="1.570796 -0.000000 1.570796"/>
+      <geometry>
+        <mesh filename="mesh/link3_roll.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <origin xyz="0.033477 0.044010 0.011655" rpy="0 0 0"/>
+      <mass value="0.565855"/>
+      <inertia ixx="3.594307180e-04" ixy="1.702787833e-05" ixz="3.432612484e-06" iyy="3.326011582e-04" iyz="-9.974993321e-06" izz="3.753457909e-04"/>
+    </inertial>
+  </link>
+
+  <link name="link4_small_yaw">
+    <visual>
+      <origin xyz="-1.350438 0.065737 -0.054959" rpy="1.570796 -0.000000 1.570796"/>
+      <geometry>
+        <mesh filename="mesh/link4_small_yaw.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="-1.350438 0.065737 -0.054959" rpy="1.570796 -0.000000 1.570796"/>
+      <geometry>
+        <mesh filename="mesh/link4_small_yaw.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <origin xyz="0.014120 0.093888 0.010979" rpy="0 0 0"/>
+      <mass value="0.197313"/>
+      <inertia ixx="7.601535559e-04" ixy="-6.611703979e-05" ixz="-1.892058788e-05" iyy="3.184682195e-04" iyz="-1.274130733e-04" izz="5.386266288e-04"/>
+    </inertial>
+  </link>
+
+  <link name="link5_pitch">
+    <visual>
+      <origin xyz="-1.379178 -0.124677 -0.059059" rpy="1.570796 -0.000000 1.570796"/>
+      <geometry>
+        <mesh filename="mesh/link5_pitch.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="-1.379178 -0.124677 -0.059059" rpy="1.570796 -0.000000 1.570796"/>
+      <geometry>
+        <mesh filename="mesh/link5_pitch.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <origin xyz="0.091807 -0.059669 0.016726" rpy="0 0 0"/>
+      <mass value="0.272199"/>
+      <inertia ixx="1.077021334e-03" ixy="8.115376634e-04" ixz="1.823039633e-04" iyy="1.006964014e-03" iyz="-2.018662072e-04" izz="1.873464277e-03"/>
+    </inertial>
+  </link>
+
+  <joint name="joint1_big_yaw" type="revolute">
+    <origin xyz="-0.000000 -0.000000 0.090100" rpy="0 0 0"/>
+    <parent link="base"/>
+    <child link="link1_big_yaw"/>
+    <axis xyz="0.000000 0.000000 -1.000000"/>
+    <limit lower="-3.1416" upper="3.1416" effort="10" velocity="10"/>
+  </joint>
+
+  <joint name="joint_laser" type="fixed">
+    <origin xyz="0.000000 0.000000 0.000000" rpy="0 0 0"/>
+    <parent link="link1_big_yaw"/>
+    <child link="link2_laser"/>
+  </joint>
+
+  <joint name="joint2_roll" type="revolute">
+    <origin xyz="0.030316 -0.004576 0.048150" rpy="0 0 0"/>
+    <parent link="link1_big_yaw"/>
+    <child link="link3_roll"/>
+    <axis xyz="-0.988800 0.149244 -0.000000"/>
+    <limit lower="-3.1416" upper="3.1416" effort="10" velocity="10"/>
+  </joint>
+
+  <joint name="joint3_small_yaw" type="revolute">
+    <origin xyz="0.032122 0.041959 0.011120" rpy="0 0 0"/>
+    <parent link="link3_roll"/>
+    <child link="link4_small_yaw"/>
+    <axis xyz="0.145115 0.961441 0.233607"/>
+    <limit lower="-3.1416" upper="3.1416" effort="10" velocity="10"/>
+  </joint>
+
+  <joint name="joint4_pitch" type="revolute">
+    <origin xyz="0.028740 0.190414 0.004099" rpy="0 0 0"/>
+    <parent link="link4_small_yaw"/>
+    <child link="link5_pitch"/>
+    <axis xyz="0.034865 0.230991 -0.972331"/>
+    <limit lower="-3.1416" upper="3.1416" effort="10" velocity="10"/>
+  </joint>
+
+  <link name="ref2"/>
+
+  <joint name="joint_ref2" type="fixed">
+    <origin xyz="-0.000000 0.000000 0.064900" rpy="1.570796 -0.000000 -0.000000"/>
+    <parent link="base"/>
+    <child link="ref2"/>
+  </joint>
+
+  <link name="ref_lidar"/>
+
+  <joint name="joint_ref_lidar" type="fixed">
+    <origin xyz="0.060280 -0.114280 0.113860" rpy="0.383972 -0.000000 -0.000000"/>
+    <parent link="link2_laser"/>
+    <child link="ref_lidar"/>
+  </joint>
+
+</robot>

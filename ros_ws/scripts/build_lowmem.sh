@@ -34,7 +34,7 @@ set -euo pipefail
 WS="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$WS"
 
-ROS_SETUP="${ROS_SETUP:-/opt/ros/jazzy/setup.bash}"
+ROS_SETUP="${ROS_SETUP:-/opt/ros/${ROS_DISTRO:-humble}/setup.bash}"
 JOBS="${JOBS:-1}"
 MEM_FLOOR_MB="${MEM_FLOOR_MB:-450}"
 MIN_START_MB="${MIN_START_MB:-700}"
@@ -77,7 +77,7 @@ swap_total_mb() { awk '/^SwapTotal:/{print int($2/1024)}' /proc/meminfo; }
 load1() { awk '{print $1}' /proc/loadavg; }
 
 ros_pkg_present() {
-    [ -d "/opt/ros/${ROS_DISTRO:-jazzy}/share/$1" ] ||
+    [ -d "/opt/ros/${ROS_DISTRO:-humble}/share/$1" ] ||
     [ -d "$WS/install/$1/share/$1" ]
 }
 

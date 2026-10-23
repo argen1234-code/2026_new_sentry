@@ -12,7 +12,7 @@ unset AMENT_PREFIX_PATH COLCON_PREFIX_PATH CMAKE_PREFIX_PATH
 unset LD_LIBRARY_PATH PYTHONPATH ROS_PACKAGE_PATH SDF_PATH GAZEBO_MODEL_PATH
 export PATH=/usr/local/bin:/usr/bin:/bin
 set +u
-source /opt/ros/jazzy/setup.bash
+source "/opt/ros/${ROS_DISTRO:-humble}/setup.bash"
 source "$workspace/install/local_setup.bash"
 set -u
 

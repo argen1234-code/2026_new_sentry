@@ -66,7 +66,7 @@ def generate_launch_description():
             condition=IfCondition(autostart)),
         Node(package="point_lio", executable="pointlio_mapping", name="point_lio",
              output="screen", parameters=[params, {"prior_pcd.enable": False,
-                                                   "pcd_save.pcd_save_en": False}]),
+                                                   "pcd_save.pcd_save_en": True}]),
         # map->odom 由 slam_toolbox 发布（transform_publish_period: 0.02），
         # 不要再加静态 map->odom，否则两个发布者会互相覆盖。
     ])

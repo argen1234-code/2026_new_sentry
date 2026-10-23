@@ -3,6 +3,9 @@ ros_ws/build/
 ros_ws/install/
 ros_ws/log/
 ros_ws/.colcon/
+# 误在仓库根目录执行 colcon 时留下的空壳
+/install/
+/log/
 *.bag
 *.db3
 *.mcap
@@ -49,6 +52,10 @@ stm32_ws/legacy/Boards/MDK-ARM/DebugConfig/
 .idea/
 .DS_Store
 Thumbs.db
+
+# ---- TF 调试产物（ros2 run tf2_tools view_frames）----
+frames_*.gv
+frames_*.pdf
 
 # ---- 本地下载与机器专属文件 ----
 .downloads/

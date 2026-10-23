@@ -51,7 +51,7 @@ terrain_analysis_ext:
     upperBoundZ: 0.8
     disRatioZ: 0.2
     checkTerrainConn: false
-    terrainUnderVehicle: -0.22
+    terrainUnderVehicle: -0.12       # 点云标定的雷达到地面高度（2026-10-23 实测 0.120 m）
     terrainConnThre: 0.5
     ceilingFilteringThre: 2.0
     localTerrainMapRadius: 4.0

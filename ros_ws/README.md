@@ -1,6 +1,6 @@
 # ROS 2 工作空间
 
-运行平台：Jetson Orin Nano / Ubuntu 24.04 / ROS 2 Jazzy。
+运行平台：Jetson Orin Nano / Ubuntu 22.04 / ROS 2 Humble。
 
 工作空间结构沿用 `2026_sentry_nav`：按职责分层的实车导航工程。
 
@@ -39,12 +39,14 @@ scripts/
 | 包 | 职责 |
 |---|---|
 | `sentry_interfaces` | 自定义消息与服务定义 |
-| `sentry_description` | 静态描述：默认当前训练车麦轮模型，`chassis_model:=sentry` 切换旧舵轮+云台模型；含 mesh、RViz 配置 |
+| `sentry_description` | 静态描述：默认 2026 正式底盘模型 `sentry_2026_static.urdf`；`chassis_model:=mecanum` / `sentry` 切换训练车麦轮 / 旧舵轮模型；含 mesh、RViz 配置 |
 | `sentry_hardware` | 雷达与裁判系统 launch、MID360 网络配置 |
 | `livox_ros_driver2` | Livox MID360 驱动（含 arm64 SDK） |
 | `extra_cmd` | `cmd_vel` 转 UDP 底盘指令 |
 | `referee_serial_bridge` | 裁判系统串口数据桥 |
-| `usb_bridge` | Jetson ↔ STM32H723 USB CDC 桥接（`/unified_cmd` → MCU，MCU → `/usb_bridge/state`） |
+| `usb_bridge` | Jetson ↔ STM32H723 USB CDC 桥接（`/unified_cmd` → MCU，MCU → `/usb_bridge/state`、`/chassis/state`） |
+| `usb_bridge/cmd_vel_to_unified` | `/cmd_vel`（`Twist`）→ `/unified_cmd`，受 `enable_motion` 安全门控 |
+| `usb_bridge/keyboard_teleop` | 键盘遥控：`ros2 run usb_bridge keyboard_teleop`，发布 `/cmd_vel`（与 `scripts/chassis_keyboard_teleop.py` 同键位） |
 | `point_lio` | LiDAR-IMU 里程计与建图 |
 | `small_gicp_relocalization` | 先验点云重定位 |
 | `sentry_localization` | 建图 / 定位统一 launch |
@@ -104,12 +106,49 @@ DRY_RUN=1 ./scripts/build_lowmem.sh
 source install/local_setup.bash
 ```
 
-实车启动：
+实车启动（`sentry.launch.py`，**定位导航整栈**，GICP + Nav2）：
 
 ```bash
 ./scripts/start_sentry.sh                    # RViz 显示（默认）
 ./scripts/start_sentry.sh visualization:=headless
 ./scripts/start_sentry.sh visualization:=foxglove
+```
+
+默认地图与先验点云是 `pb2025_nav_bringup` 里的 `lab` 资产；换场地时显式指定：
+
+```bash
+./scripts/start_sentry.sh \
+  map:=$PWD/install/pb2025_nav_bringup/share/pb2025_nav_bringup/map/reality/lab.yaml \
+  prior_pcd_file:=$PWD/install/pb2025_nav_bringup/share/pb2025_nav_bringup/pcd/reality/lab.pcd
+```
+
+遥控建图（无 Nav2）：
+
+```bash
+# 默认：上位机键盘可用，另开一个终端运行键盘遥控
+ros2 launch sentry_bringup mapping.launch.py rviz:=true
+ros2 run usb_bridge keyboard_teleop
+
+# 不用键盘：上位机键盘无效，底盘只认下位机遥控器
+ros2 launch sentry_bringup mapping.launch.py keyboard_teleop:=false rviz:=true
+```
+
+单机入口 `rviz_navigation.launch.py` 仍保留 `slam:=true`（实时建图 + 导航）与
+`slam:=false`（定位 + 导航）两种模式。
+
+底盘链路通过 `chassis_transport` 选择：
+
+```bash
+# 正式底盘：/cmd_vel -> cmd_vel_to_unified -> USB CDC -> STM32
+./scripts/start_sentry.sh chassis_transport:=usb
+# 旧底盘板：/cmd_vel -> extra_cmd -> UDP
+./scripts/start_sentry.sh chassis_transport:=udp
+```
+
+USB 链路默认 `enable_motion:=false`，只发布状态、不驱动底盘；确认安全后显式打开：
+
+```bash
+./scripts/start_sentry.sh chassis_transport:=usb enable_motion:=true
 ```
 
 ## MID360 网络
@@ -142,17 +181,27 @@ ping -c 3 192.168.1.153
 
 ## 当前状态
 
-已按 `2026_sentry_nav` 导入完整包结构，并将 ROS 发行版从 Humble 适配到 Jazzy。
-工作空间 **24 / 24 个包** 已编译安装，`sentry.launch.py` 参数可正常解析。
+已按 `2026_sentry_nav` 导入完整包结构，并完成 Jazzy → Humble 适配。
+工作空间全部包已在本机 Ubuntu 22.04 / ROS 2 Humble 下编译安装，
+`sentry.launch.py` 参数可正常解析。
 
-Jazzy 适配修改：
+Humble 适配修改：
 
 | 包 | 修改 |
 |---|---|
 | `livox_ros_driver2` | 显式设置点云/IMU 目的 IP 与端口、启用点云发送、查询内部状态 |
-| `pb_nav2_plugins` | `Status` → `ResultStatus`、`Twist` → `TwistStamped`、`CombinationMethod` 转换 |
-| `pb_omni_pid_pursuit_controller` | `nav2_core/exceptions.hpp` → `controller_exceptions.hpp` |
+| `pb_nav2_plugins` | `ResultStatus` → `Status`、`TwistStamped` → `Twist`、`combination_method` 直接取 `int` |
+| `pb_omni_pid_pursuit_controller` | `nav2_core::*Exception` → `std::runtime_error`（Humble 无该头文件） |
+| `nav2_params.yaml` | `progress_checker_plugins` → `progress_checker_plugin`（Humble 单数参数） |
 | `standard_robot_pp_ros2` | `fromVector()` 中 `T packet{}` 零初始化，消除 `-Werror=maybe-uninitialized` |
+
+离线构建 `small_gicp_relocalization` 时，FetchContent 默认会从 GitHub 克隆
+`small_gicp`。网络受限时用本地源码覆盖：
+
+```bash
+colcon build --symlink-install \
+  --cmake-args -DFETCHCONTENT_SOURCE_DIR_SMALL_GICP=/path/to/small_gicp
+```
 
 MID360 实测状态：
 

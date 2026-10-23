@@ -2,11 +2,11 @@
 
 ## 1. ROS 2 工作空间
 
-环境：Ubuntu 24.04 + ROS 2 Jazzy（Jetson Orin Nano）。
+环境：Ubuntu 22.04 + ROS 2 Humble（Jetson Orin Nano）。
 
 ```bash
 cd ros_ws
-source /opt/ros/jazzy/setup.bash
+source /opt/ros/humble/setup.bash
 colcon build --symlink-install
 source install/setup.bash
 ```
@@ -24,27 +24,42 @@ colcon test-result --verbose
 
 新增功能包后，把包目录放到 `ros_ws/src/`，包内至少包含 `package.xml` 和 `CMakeLists.txt`（或 `setup.py`）。
 
+`small_gicp_relocalization` 通过 FetchContent 从 GitHub 拉取 `small_gicp`。
+网络受限时改用本地源码，避免构建卡在 `git clone`：
+
+```bash
+colcon build --symlink-install \
+  --cmake-args -DFETCHCONTENT_SOURCE_DIR_SMALL_GICP=/path/to/small_gicp
+```
+
 语言约定：
 
 | 类型 | 语言 | 示例 |
 |---|---|---|
 | 实时控制、设备桥、算法核心 | C++17 | `sentry_control`、`sentry_devices` |
-| 决策、工具、脚本 | Python 3.12 | `sentry_decision`、`sentry_tools` |
+| 决策、工具、脚本 | Python 3.10 | `sentry_decision`、`sentry_tools` |
 | 消息/服务/动作 | `.msg/.srv/.action` | `sentry_msgs` |
 
 ## 2. STM32 固件
 
+`stm32_ws/` 下并行维护两套独立工程，详见 [`stm32_ws/README.md`](../stm32_ws/README.md)：
+`stm32_ws/legacy/` 是本节介绍的原有固件（CMake + Ninja）；
+`stm32_ws/sentinel/` 是上游 [threfire/Sentinel](https://github.com/threfire/Sentinel)
+代码，使用 Keil MDK-ARM，构建方式不同，不要混用。
+
+以下为 `legacy/` 固件：
+
 目标板：STM32H723VGTx（1 MB Flash）。构建：CMake + Ninja + arm-none-eabi-gcc。
 调试/烧录：DAPLink v2（CMSIS-DAP）+ OpenOCD 0.12。
 
-- 最终入口：`stm32_ws/Tasks/main.c`，**不要**把 CubeMX 生成的 `Core/Src/main.c` 当作最终入口。
+- 最终入口：`stm32_ws/legacy/Tasks/main.c`，**不要**把 CubeMX 生成的 `Core/Src/main.c` 当作最终入口。
 - `.ioc` 只用于生成板级事实，禁止手改生成文件和 `main()` 初始化顺序。
 - Keil 工程仍保留在 `Boards/MDK-ARM/`，但日常构建使用 CMake。
 
 固件选项：
 
 ```bash
-cd stm32_ws/Boards
+cd stm32_ws/legacy/Boards
 
 # 默认 sentry_2026
 cmake --preset Debug
@@ -94,7 +109,7 @@ USB 桥接验证：
 
 ```bash
 cd ros_ws
-source /opt/ros/jazzy/setup.bash
+source /opt/ros/humble/setup.bash
 source install/setup.bash
 ros2 launch usb_bridge usb_bridge.launch.py
 
@@ -118,7 +133,7 @@ rsync -av --delete ros_ws/install/ argen@192.168.31.183:~/2026_new_sentry/ros_ws
 ```bash
 ssh argen@192.168.31.183
 cd ~/2026_new_sentry/ros_ws
-source /opt/ros/jazzy/setup.bash
+source /opt/ros/humble/setup.bash
 colcon build --symlink-install
 ```
 

@@ -12,7 +12,7 @@
 
 | 侧 | 运行平台 | 职责 | 不负责 |
 |---|---|---|---|
-| ROS 侧 | Jetson Orin Nano / Ubuntu 24.04 / ROS 2 Jazzy | 目标检测、自瞄解算、SLAM/定位、路径规划、行为决策、可视化与日志 | 电机换向、电流环、安全钳位 |
+| ROS 侧 | Jetson Orin Nano / Ubuntu 22.04 / ROS 2 Humble | 目标检测、自瞄解算、SLAM/定位、路径规划、行为决策、可视化与日志 | 电机换向、电流环、安全钳位 |
 | STM32 侧 | STM32H723 / FreeRTOS | 电机与传感器 I/O、姿态解算、机构控制、裁判系统、通信链路、失效保护 | 视觉识别、全局路径规划、复杂决策 |
 
 ## 3. STM32 侧分层
@@ -34,6 +34,10 @@ Boards          CubeMX / HAL / Keil 生成工程与板级启动文件
 ```
 
 `Algorithm` 为纯算法库（PID、Kalman、Mahony、弹道、数学工具），可被 Bsp 以上的任意层调用，但不反向依赖业务层。
+
+> 上述分层描述的是 `stm32_ws/legacy/`（原固件）。`stm32_ws/sentinel/` 是独立引入的
+> 上游工程（`Core/User/APP/APP_Support/Communication` 分层 + Keil 构建），
+> 不遵循本节的层次约定，详见 [`stm32_ws/README.md`](../stm32_ws/README.md)。
 
 ### 依赖规则
 

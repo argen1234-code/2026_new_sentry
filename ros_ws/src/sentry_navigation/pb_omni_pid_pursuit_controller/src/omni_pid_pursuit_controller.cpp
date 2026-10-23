@@ -14,7 +14,8 @@
 
 #include "pb_omni_pid_pursuit_controller/omni_pid_pursuit_controller.hpp"
 
-#include "nav2_core/controller_exceptions.hpp"
+#include <stdexcept>
+
 #include "nav2_util/geometry_utils.hpp"
 #include "nav2_util/node_utils.hpp"
 
@@ -37,7 +38,7 @@ void OmniPidPursuitController::configure(
   auto node = parent.lock();
   node_ = parent;
   if (!node) {
-    throw nav2_core::ControllerException("Unable to lock node!");
+    throw std::runtime_error("Unable to lock node!");
   }
 
   costmap_ros_ = costmap_ros;
@@ -335,13 +336,13 @@ nav_msgs::msg::Path OmniPidPursuitController::transformGlobalPlan(
   const geometry_msgs::msg::PoseStamped & pose)
 {
   if (global_plan_.poses.empty()) {
-    throw nav2_core::InvalidPath("Received plan with zero length");
+    throw std::runtime_error("Received plan with zero length");
   }
 
   // let's get the pose of the robot in the frame of the plan
   geometry_msgs::msg::PoseStamped robot_pose;
   if (!transformPose(global_plan_.header.frame_id, pose, robot_pose)) {
-    throw nav2_core::ControllerTFError("Unable to transform robot pose into global plan's frame");
+    throw std::runtime_error("Unable to transform robot pose into global plan's frame");
   }
 
   // We'll discard points on the plan that are outside the local costmap
@@ -389,7 +390,7 @@ nav_msgs::msg::Path OmniPidPursuitController::transformGlobalPlan(
   local_path_pub_->publish(transformed_plan);
 
   if (transformed_plan.poses.empty()) {
-    throw nav2_core::InvalidPath("Resulting plan has 0 poses in it.");
+    throw std::runtime_error("Resulting plan has 0 poses in it.");
   }
 
   return transformed_plan;

@@ -149,7 +149,7 @@ terrain_analysis_ext:
     upperBoundZ: 0.8
     disRatioZ: 0.2
     checkTerrainConn: False
-    terrainUnderVehicle: -0.22
+    terrainUnderVehicle: -0.12       # 点云标定的雷达到地面高度（2026-10-23 实测 0.120 m）
     terrainConnThre: 0.5
     ceilingFilteringThre: 2.0
     localTerrainMapRadius: 4.0
@@ -360,12 +360,12 @@ controller_server:
     min_y_velocity_threshold: 0.001
     min_theta_velocity_threshold: 0.001
     failure_tolerance: 0.3
-    progress_checker_plugins: ["progress_checker"]
+    progress_checker_plugin: "progress_checker"
     goal_checker_plugins: ["general_goal_checker"]
     controller_plugins: ["FollowPath"]
     progress_checker:
       plugin: "nav2_controller::SimpleProgressChecker"
-      required_movement_radius: 0.6  # 降低到0.1m，避免转向时误报无法前进
+      required_movement_radius: 0.1  # 原地转向时也允许控制器获得进展
       movement_time_allowance: 60.0  # 增加到15秒，给转向留出足够时间
     general_goal_checker:
       stateful: True
@@ -417,7 +417,7 @@ local_costmap:
       width: 5
       height: 5
       resolution: 0.05
-      robot_radius: 0.28 # 当前训练车按0.28m圆处理
+      robot_radius: 0.26 # 实测车体半径26cm（车边缘到圆心）
       #footprint: "[[0.325, 0.325], [0.325, -0.325], [-0.325, -0.325], [-0.325, 0.325]]"  # 正方形机器人，边长65cm
       plugins: ["static_layer", "intensity_voxel_layer", "inflation_layer"]
       # plugins: ["intensity_voxel_layer", "inflation_layer"]
@@ -433,12 +433,10 @@ local_costmap:
         unknown_threshold: 5
         z_resolution: 0.05
         z_voxels: 16
-        min_obstacle_height: 0.05
-        max_obstacle_height: 1.0
-        min_obstacle_intensity: 0.0
-        max_obstacle_intensity: 5.0
-        use_footprint_filter: false  # 不需要，terrain_analysis_ext已在源头过滤
-        footprint_padding: 0.03     # footprint外扩3cm
+        min_obstacle_height: 0.0
+        max_obstacle_height: 2.0
+        min_obstacle_intensity: 0.1
+        max_obstacle_intensity: 2.0
         observation_sources: terrain_map
         terrain_map:
           data_type: PointCloud2
@@ -447,17 +445,13 @@ local_costmap:
           topic: <robot_namespace>/terrain_map
           sensor_frame: front_mid360
           min_obstacle_height: 0.0
-          max_obstacle_height: 1.0
-          obstacle_max_range: 4.0
-          obstacle_min_range: 0.0  # 不需要，terrain_analysis_ext已在源头过滤
-          observation_persistence: 1.5  # terrain 的 intensity 是高度差，不能当反射率过滤
-          clearing: true  # 启用清除功能，当视野内没有障碍物时清除该区域
-          raytrace_max_range: 4.0  # 光线追踪最大范围，用于清除障碍物
-          raytrace_min_range: 0.0
-  
+          max_obstacle_height: 2.0
+          obstacle_max_range: 5.0
+          obstacle_min_range: 0.2
+
       static_layer:
         plugin: "nav2_costmap_2d::StaticLayer"
-        map_subscribe_transient_local: False  # slam_toolbox发布/map使用volatile QoS，需设为False匹配
+        map_subscribe_transient_local: True  # map_server 与 slam_toolbox 均以 transient_local 发布 /map
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 5.0
@@ -475,7 +469,7 @@ global_costmap:
       rolling_window: true   # 建图模式下使用滚动窗口
       width: 30              # 扩大到 30m x 30m，覆盖更大范围
       height: 30
-      robot_radius: 0.28  # 当前训练车按0.28m圆处理
+      robot_radius: 0.26  # 实测车体半径26cm（车边缘到圆心）
       #footprint: "[[0.325, 0.325], [0.325, -0.325], [-0.325, -0.325], [-0.325, 0.325]]"  # 正方形机器人，边长65cm
       resolution: 0.05
       track_unknown_space: true
@@ -494,11 +488,9 @@ global_costmap:
         z_resolution: 0.05
         z_voxels: 16
         min_obstacle_height: 0.0
-        max_obstacle_height: 1.0
-        min_obstacle_intensity: 0.0
-        max_obstacle_intensity: 5.0
-        use_footprint_filter: true  # 不需要，terrain_analysis_ext已在源头过滤
-        footprint_padding: 0.03     # footprint外扩3cm
+        max_obstacle_height: 2.0
+        min_obstacle_intensity: 0.1
+        max_obstacle_intensity: 2.0
         observation_sources: terrain_map_ext
         terrain_map_ext:
           data_type: PointCloud2
@@ -507,16 +499,12 @@ global_costmap:
           topic: <robot_namespace>/terrain_map_ext
           sensor_frame: front_mid360
           min_obstacle_height: 0.0
-          max_obstacle_height: 1.0
+          max_obstacle_height: 2.0
           obstacle_max_range: 10.0
-          obstacle_min_range: 0.0  # 不需要，terrain_analysis_ext已在源头过滤
-          observation_persistence: 1.5  # terrain 的 intensity 是高度差，不能当反射率过滤
-          clearing: true  # 启用清除功能，当视野内没有障碍物时清除该区域
-          raytrace_max_range: 10.0  # 光线追踪最大范围，用于清除障碍物
-          raytrace_min_range: 0.0
+          obstacle_min_range: 0.2
       static_layer:
         plugin: "nav2_costmap_2d::StaticLayer"
-        map_subscribe_transient_local: False  # slam_toolbox发布/map使用volatile QoS，需设为False匹配
+        map_subscribe_transient_local: True  # map_server 与 slam_toolbox 均以 transient_local 发布 /map
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 5.0
@@ -545,7 +533,10 @@ planner_server:
     action_server_result_timeout: 300.0  # 增加规划器超时时间
     planner_plugins: ["GridBased"]
     GridBased:
-      plugin: "nav2_theta_star_planner::ThetaStarPlanner" # Jazzy 使用 "::"
+      # 插件名必须与插件 XML 里的 name 完全一致：本机 nav2 1.1.20 声明的是
+      # "nav2_theta_star_planner/ThetaStarPlanner"，写成 "::" 会 FATAL 并中止整个
+      # lifecycle bringup（表现为 RViz 设目标点无反应）。
+      plugin: "nav2_theta_star_planner/ThetaStarPlanner"
       how_many_corners: 8
       w_euc_cost: 1.0
       w_traversal_cost: 10.0
@@ -572,16 +563,18 @@ behavior_server:
     global_footprint_topic: global_costmap/published_footprint
     cycle_frequency: 10.0
     behavior_plugins: ["spin", "backup", "drive_on_heading", "assisted_teleop", "wait"]
+    # 同上：nav2_behaviors 的插件 XML 用 name 注册（nav2_behaviors/Spin），
+    # 必须按 name 引用，不能写成 "::"。
     spin:
-      plugin: "nav2_behaviors::Spin"
+      plugin: "nav2_behaviors/Spin"
     backup:
       plugin: "pb_nav2_behaviors/BackUpFreeSpace"
     drive_on_heading:
-      plugin: "nav2_behaviors::DriveOnHeading"
+      plugin: "nav2_behaviors/DriveOnHeading"
     wait:
-      plugin: "nav2_behaviors::Wait"
+      plugin: "nav2_behaviors/Wait"
     assisted_teleop:
-      plugin: "nav2_behaviors::AssistedTeleop"
+      plugin: "nav2_behaviors/AssistedTeleop"
     local_frame: odom
     global_frame: map
     robot_base_frame: gimbal_yaw_fake

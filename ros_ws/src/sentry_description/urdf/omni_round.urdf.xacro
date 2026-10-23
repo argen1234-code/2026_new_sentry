@@ -1,0 +1,221 @@
+<?xml version="1.0"?>
+<!--
+  Round four-omni-wheel chassis, standalone display / TF model.
+
+  Geometry (measured / specified values, edit here):
+    body_radius        = 0.26 m   圆形车体半径
+    body_top_z         = 0.06 m   车体顶面离地高度（点云约束，见下）
+    body_bottom_z      = 0.02 m   车体底面离地高度
+    wheel_radius       = 0.075 m  全向轮半径（与 robot_param.h 一致）
+    wheel_width        = 0.045 m
+    wheel_mount_radius = 0.26 m   轮心在车体边缘圆周上
+    wheel angles       = +-45deg, +-135deg
+    lidar position     = (0.20, 0, 0.12) 车体前部上方，光心离地 0.12 m
+
+  Body height is bounded by the point cloud, not measured directly.  The
+  MID360 looks only 7 deg down, so a full-radius deck whose top sits h
+  below the sensor origin first shows its surface at h / tan(7deg) and is
+  visible out to the deck's far edge (0.46 m from the sensor).  A deck top
+  less than 0.056 m below the origin would therefore paint the r = 0.16 -
+  0.46 m band; the cloud has only 36 points in r = 0.2 - 0.6 m, so the
+  deck top must be at or below 0.064 m above the floor and is seen only
+  edge-on.  The old 0.30 m value was a guess and put the lidar *inside*
+  the body; it is gone.  (The 0.10 - 0.21 m near-field cluster on the
+  vehicle's left, top 0.163 m, is a bracket / wheel top, not the deck.)
+
+  Frames:
+    base_footprint  地面投影（Nav2 base_frame，z = 0）
+    base_link       轮轴平面圆心（离地 wheel_radius）；车体板在其下方
+                    z = body_bottom_z - wheel_radius 到 body_top_z - wheel_radius
+    gimbal_yaw      兼容帧：本车没有云台，固定在 base_link（Nav2
+                    robot_base_frame / fake_vel_transform 要用）
+    imu_link        兼容帧：usb_bridge 的 /imu/data 用这个名字，暂与
+                    base_link 重合
+    front_mid360    雷达测量中心，项目里已有的雷达坐标系名字
+    wheel_*         四个全向轮，关节名与 usb_bridge 发布的
+                    serial/joint_states_raw 一致
+
+  Wheel centres sit at z = 0 in base_link and are tangent to the ground at
+  z = -wheel_radius, so base_footprint is wheel_radius below base_link.
+  The wheel axles are radial: each wheel rolls tangentially, which is the
+  standard 4-omni layout.
+
+  This is a visualization/TF model only (no ros2_control, no inertia tuning
+  beyond plausible values). Keep the frame names: the Nav2 / localization /
+  perception configs reference base_footprint and front_mid360.
+-->
+<robot name="omni_round" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:property name="body_radius" value="0.26"/>
+  <!-- Chassis plate, 0.02 - 0.06 m above the floor.  Anything taller would
+       enter the lidar's 7 deg downward view (see the header note), so the
+       plate is seen edge-on and the sensor clears it. -->
+  <xacro:property name="body_top_z" value="0.06"/>
+  <xacro:property name="body_bottom_z" value="0.02"/>
+  <xacro:property name="wheel_radius" value="0.075"/>
+  <xacro:property name="wheel_width" value="0.045"/>
+  <xacro:property name="wheel_mount_radius" value="0.26"/>
+  <!-- Derived, in base_link coordinates (base_link sits wheel_radius above
+       the floor). -->
+  <xacro:property name="body_height" value="${body_top_z - body_bottom_z}"/>
+  <xacro:property name="body_centre_z" value="${(body_top_z + body_bottom_z) / 2 - wheel_radius}"/>
+
+  <!-- Lidar: 0.20 m from the body centre, mounted 90 deg CLOCKWISE from the
+       chassis +x axis (2026-10-23, user): the position vector rotates about
+       the centre from the nose to the right-hand side, i.e. (0, -0.20).
+       The body edge is 0.26 m out, so the sensor sits inside the outline.
+       Heading: the sensor is mounted rotated 90 deg clockwise about z
+       relative to the chassis, so the joint carries a -pi/2 yaw.  This is
+       the value the user validated against the real world in RViz
+       (2026-10-23); 0 and +pi/2 are both wrong and must not be "corrected"
+       to make the red +X arrow point at the nose; the arrow follows the
+       sensor, not the chassis. -->
+  <xacro:property name="lidar_mount_radius" value="0.20"/>
+  <xacro:property name="lidar_mount_angle" value="${-pi / 2}"/>
+  <xacro:property name="lidar_x" value="${lidar_mount_radius * cos(lidar_mount_angle)}"/>
+  <xacro:property name="lidar_y" value="${lidar_mount_radius * sin(lidar_mount_angle)}"/>
+  <xacro:property name="lidar_radius" value="0.0325"/>
+  <xacro:property name="lidar_height" value="0.06"/>
+  <xacro:property name="lidar_yaw" value="${-pi / 2}"/>
+  <!-- Height of the measurement origin above the ground, fitted from the
+       point cloud on 2026-10-23: the floor plane sits 0.120 m below the
+       sensor origin (1814 inliers over 1.1-4.6 m, ~180 deg azimuth, plane
+       rms 1.0 cm, no drift with range).  That is also where the floor first
+       becomes visible (~1.1 m out, the MID360 only looks 7 deg down).
+       The sensor is 1.4 deg off level (pitch 0.75 deg, roll 1.17 deg);
+       too small to encode, so the joint keeps a pure yaw. -->
+  <xacro:property name="lidar_z" value="0.12"/>
+
+  <material name="body_gray"><color rgba="0.72 0.75 0.79 1.0"/></material>
+  <material name="body_dark"><color rgba="0.28 0.30 0.34 1.0"/></material>
+  <material name="wheel_dark"><color rgba="0.10 0.10 0.12 1.0"/></material>
+  <material name="lidar_dark"><color rgba="0.18 0.20 0.24 1.0"/></material>
+
+  <!-- ===== ground projection ===== -->
+  <link name="base_footprint"/>
+
+  <joint name="base_footprint_to_base_link" type="fixed">
+    <parent link="base_footprint"/>
+    <child link="base_link"/>
+    <origin xyz="0 0 ${wheel_radius}" rpy="0 0 0"/>
+  </joint>
+
+  <!-- ===== chassis body, base_link at the bottom circle centre ===== -->
+  <link name="base_link">
+    <visual>
+      <origin xyz="0 0 ${body_centre_z}" rpy="0 0 0"/>
+      <geometry><cylinder radius="${body_radius}" length="${body_height}"/></geometry>
+      <material name="body_gray"/>
+    </visual>
+    <visual>
+      <!-- top deck, slightly darker so the roof plane is readable -->
+      <origin xyz="0 0 ${body_top_z - 0.005 - wheel_radius}" rpy="0 0 0"/>
+      <geometry><cylinder radius="${body_radius}" length="0.01"/></geometry>
+      <material name="body_dark"/>
+    </visual>
+    <visual>
+      <!-- Lidar stand: the plate top is at body_top_z and the sensor's
+           measurement origin at lidar_z, so the visual (lidar_height tall,
+           centred on the origin) starts lidar_z - lidar_height/2 above the
+           floor.  This slim post fills that 3 cm gap. -->
+      <origin xyz="${lidar_x} ${lidar_y}
+                   ${(body_top_z + lidar_z - lidar_height / 2) / 2 - wheel_radius}"
+              rpy="0 0 0"/>
+      <geometry><cylinder radius="0.012"
+                          length="${lidar_z - lidar_height / 2 - body_top_z}"/></geometry>
+      <material name="body_dark"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 ${body_centre_z}" rpy="0 0 0"/>
+      <geometry><cylinder radius="${body_radius}" length="${body_height}"/></geometry>
+    </collision>
+    <inertial>
+      <!-- 15 kg plate, r = 0.26 m, h = 0.04 m -->
+      <mass value="15.0"/>
+      <inertia ixx="0.256" ixy="0" ixz="0"
+               iyy="0.256" iyz="0"
+               izz="0.507"/>
+    </inertial>
+  </link>
+
+  <!-- ===== compatibility frames required by the Nav2 / localization stack ===== -->
+  <link name="gimbal_yaw"/>
+  <joint name="gimbal_yaw_fixed_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="gimbal_yaw"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
+  <link name="imu_link"/>
+  <joint name="imu_link_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="imu_link"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
+  <!-- ===== four omni wheels, axles radial ===== -->
+  <xacro:macro name="omni_wheel" params="name angle">
+    <link name="${name}">
+      <visual>
+        <geometry><cylinder radius="${wheel_radius}" length="${wheel_width}"/></geometry>
+        <material name="wheel_dark"/>
+      </visual>
+      <collision>
+        <geometry><cylinder radius="${wheel_radius}" length="${wheel_width}"/></geometry>
+      </collision>
+      <inertial>
+        <mass value="0.5"/>
+        <inertia ixx="0.00077" ixy="0" ixz="0"
+                 iyy="0.00077" iyz="0"
+                 izz="0.001406"/>
+      </inertial>
+    </link>
+    <!-- rpy=(0, pi/2, angle) makes the link +z point radially outward, so the
+         cylinder axis is the axle and the wheel rolls tangentially. -->
+    <joint name="${name}_joint" type="continuous">
+      <parent link="base_link"/>
+      <child link="${name}"/>
+      <origin xyz="${wheel_mount_radius * cos(angle)} ${wheel_mount_radius * sin(angle)} 0"
+              rpy="0 ${pi / 2} ${angle}"/>
+      <axis xyz="0 0 1"/>
+      <limit effort="20.0" velocity="50.0"/>
+    </joint>
+  </xacro:macro>
+
+  <!-- Joint names match WHEEL_JOINTS in usb_bridge so the firmware's
+       serial/joint_states_raw drives these wheels directly. -->
+  <xacro:omni_wheel name="wheel_front_left"  angle="${pi / 4}"/>
+  <xacro:omni_wheel name="wheel_front_right" angle="${-pi / 4}"/>
+  <xacro:omni_wheel name="wheel_back_left"   angle="${3 * pi / 4}"/>
+  <xacro:omni_wheel name="wheel_back_right"  angle="${-3 * pi / 4}"/>
+
+  <!-- ===== lidar on the roof ===== -->
+  <link name="front_mid360">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><cylinder radius="${lidar_radius}" length="${lidar_height}"/></geometry>
+      <material name="lidar_dark"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><cylinder radius="${lidar_radius}" length="${lidar_height}"/></geometry>
+    </collision>
+    <inertial>
+      <mass value="0.3"/>
+      <inertia ixx="0.000169" ixy="0" ixz="0"
+               iyy="0.000169" iyz="0"
+               izz="0.000158"/>
+    </inertial>
+  </link>
+
+  <!-- The joint origin is the measurement centre, at the calibrated height
+       above the ground (`lidar_z`), relative to base_link which sits
+       wheel_radius above base_footprint. -->
+  <joint name="joint_lidar" type="fixed">
+    <parent link="gimbal_yaw"/>
+    <child link="front_mid360"/>
+    <origin xyz="${lidar_x} ${lidar_y} ${lidar_z - wheel_radius}"
+            rpy="0 0 ${lidar_yaw}"/>
+  </joint>
+
+</robot>

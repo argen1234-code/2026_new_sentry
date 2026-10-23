@@ -1,0 +1,180 @@
+<?xml version="1.0"?>
+<!--
+  2026 official sentry: static description imported from 哨兵总装_urdf.zip.
+
+  Source: sentry.urdf (SolidWorks export) + 6 mesh/link*.stl.  The source
+  model contains only the chassis top plate and the four-axis gimbal stack;
+  it has no wheels, so this port keeps the whole assembly rigid and exposes
+  only the frames the stack needs:
+
+    base_footprint  ground projection (Nav2 base_frame / slam / small_gicp)
+    base_link       CAD `base` frame, chassis body
+    gimbal_yaw      renamed from `link1_big_yaw` (Nav2 robot_base_frame,
+                    fake_vel_transform, teleop, pursuit controller)
+    front_mid360    renamed from `ref_lidar` (Livox frame_id, sensor_frame,
+                    loam_interface / small_gicp)
+
+  Frames kept from the export for later sensor work: link2_laser,
+  link3_roll, link4_small_yaw, link5_pitch, ref2.
+
+  Geometry facts copied verbatim from the export:
+    base -> gimbal_yaw      = (0, 0, 0.0901)
+    gimbal_yaw -> front_mid360 (through link2_laser)
+                            = (0.06028, -0.11428, 0.11386)
+                              rpy = (0.383972, 0, 0)  # pitch 22 deg
+    -> lidar is 0.20396 m above the CAD base origin
+
+  Assumption to verify on the real car: the CAD base origin is the ground
+  projection.  Evidence: the lidar then sits 0.204 m above the floor, which
+  matches the 0.21 m measured on the previous chassis.  If the real mounting
+  height differs, change `base_footprint_to_base_link` below - nothing else
+  in the TF tree depends on this offset.
+-->
+<robot name="sentry_2026">
+
+  <material name="chassis_dark"><color rgba="0.22 0.24 0.27 1.0"/></material>
+  <material name="gimbal_gray"><color rgba="0.55 0.58 0.62 1.0"/></material>
+  <material name="laser_dark"><color rgba="0.10 0.10 0.12 1.0"/></material>
+
+  <!-- Ground projection: keep this name, Nav2/localization use it. -->
+  <link name="base_footprint"/>
+
+  <!-- CAD `base`: chassis top plate. -->
+  <link name="base_link">
+    <visual>
+      <origin xyz="-1.288000 0.103120 0.094410" rpy="1.570796 -0.000000 1.570796"/>
+      <geometry>
+        <mesh filename="package://sentry_description/meshes/sentry_2026/base.stl"
+              scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="chassis_dark"/>
+    </visual>
+  </link>
+
+  <!-- CAD base origin is assumed to be on the floor; edit only this offset
+       if the measured mounting height differs. -->
+  <joint name="base_footprint_to_base_link" type="fixed">
+    <parent link="base_footprint"/>
+    <child link="base_link"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
+  <!-- Yaw axis of the gimbal. Kept as a fixed frame: the stack has no
+       independent gimbal feedback yet (fake_vel_transform publishes
+       gimbal_yaw_fake as identity). -->
+  <link name="gimbal_yaw">
+    <visual>
+      <origin xyz="-1.288000 0.103120 0.004310" rpy="1.570796 -0.000000 1.570796"/>
+      <geometry>
+        <mesh filename="package://sentry_description/meshes/sentry_2026/link1_big_yaw.stl"
+              scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="gimbal_gray"/>
+    </visual>
+  </link>
+
+  <joint name="joint1_big_yaw" type="fixed">
+    <parent link="base_link"/>
+    <child link="gimbal_yaw"/>
+    <origin xyz="0.000000 0.000000 0.090100" rpy="0 0 0"/>
+  </joint>
+
+  <!-- LiDAR bracket, rigidly attached to the yaw link. -->
+  <link name="link2_laser">
+    <visual>
+      <origin xyz="-1.288000 0.103120 0.004310" rpy="1.570796 -0.000000 1.570796"/>
+      <geometry>
+        <mesh filename="package://sentry_description/meshes/sentry_2026/link2_laser.stl"
+              scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="laser_dark"/>
+    </visual>
+  </link>
+
+  <joint name="joint_laser" type="fixed">
+    <parent link="gimbal_yaw"/>
+    <child link="link2_laser"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
+  <!-- MID360 frame. `ref_lidar` in the export; the whole stack expects
+       front_mid360. Pitch follows the export (22 deg). -->
+  <link name="front_mid360"/>
+  <joint name="joint_ref_lidar" type="fixed">
+    <parent link="link2_laser"/>
+    <child link="front_mid360"/>
+    <origin xyz="0.060280 -0.114280 0.113860" rpy="0.383972 -0.000000 -0.000000"/>
+  </joint>
+
+  <!-- Roll link of the four-axis gimbal. -->
+  <link name="link3_roll">
+    <visual>
+      <origin xyz="-1.318316 0.107696 -0.043840" rpy="1.570796 -0.000000 1.570796"/>
+      <geometry>
+        <mesh filename="package://sentry_description/meshes/sentry_2026/link3_roll.stl"
+              scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="gimbal_gray"/>
+    </visual>
+  </link>
+
+  <joint name="joint2_roll" type="fixed">
+    <parent link="gimbal_yaw"/>
+    <child link="link3_roll"/>
+    <origin xyz="0.030316 -0.004576 0.048150" rpy="0 0 0"/>
+  </joint>
+
+  <!-- Small yaw link. -->
+  <link name="link4_small_yaw">
+    <visual>
+      <origin xyz="-1.350438 0.065737 -0.054959" rpy="1.570796 -0.000000 1.570796"/>
+      <geometry>
+        <mesh filename="package://sentry_description/meshes/sentry_2026/link4_small_yaw.stl"
+              scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="gimbal_gray"/>
+    </visual>
+  </link>
+
+  <joint name="joint3_small_yaw" type="fixed">
+    <parent link="link3_roll"/>
+    <child link="link4_small_yaw"/>
+    <origin xyz="0.032122 0.041959 0.011120" rpy="0 0 0"/>
+  </joint>
+
+  <!-- Pitch link (launcher / camera carrier). -->
+  <link name="link5_pitch">
+    <visual>
+      <origin xyz="-1.379178 -0.124677 -0.059059" rpy="1.570796 -0.000000 1.570796"/>
+      <geometry>
+        <mesh filename="package://sentry_description/meshes/sentry_2026/link5_pitch.stl"
+              scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="gimbal_gray"/>
+    </visual>
+  </link>
+
+  <joint name="joint4_pitch" type="fixed">
+    <parent link="link4_small_yaw"/>
+    <child link="link5_pitch"/>
+    <origin xyz="0.028740 0.190414 0.004099" rpy="0 0 0"/>
+  </joint>
+
+  <!-- Interface frame from the export, left for future sensors. -->
+  <link name="ref2"/>
+  <joint name="joint_ref2" type="fixed">
+    <parent link="base_link"/>
+    <child link="ref2"/>
+    <origin xyz="-0.000000 0.000000 0.064900" rpy="1.570796 -0.000000 -0.000000"/>
+  </joint>
+
+  <!-- The DM-MC02 board IMU mount is not measured yet; usb_bridge publishes
+       /imu/data in this frame. Keep it at the chassis origin. -->
+  <link name="imu_link"/>
+  <joint name="imu_link_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="imu_link"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
+</robot>

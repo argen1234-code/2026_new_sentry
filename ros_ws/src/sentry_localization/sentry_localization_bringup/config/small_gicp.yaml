@@ -11,5 +11,5 @@ small_gicp_relocalization:
     base_frame: base_footprint
     robot_base_frame: gimbal_yaw
     lidar_frame: front_mid360
-    input_cloud_topic: cloud_registered
+    input_cloud_topic: registered_scan
     init_pose: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]

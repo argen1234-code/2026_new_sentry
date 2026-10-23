@@ -13,11 +13,13 @@ fi
 
 export DEBIAN_FRONTEND=noninteractive
 
+ROS_DISTRO="${ROS_DISTRO:-humble}"
+
 apt-get update
 apt-get install -y --no-install-recommends \
-    ros-jazzy-pcl-ros \
-    ros-jazzy-serial-driver \
-    ros-jazzy-asio-cmake-module
+    "ros-${ROS_DISTRO}-pcl-ros" \
+    "ros-${ROS_DISTRO}-serial-driver" \
+    "ros-${ROS_DISTRO}-asio-cmake-module"
 
 # Optional but useful when debugging serial links or rebuilding Livox.
 apt-get install -y --no-install-recommends \
@@ -28,7 +30,7 @@ apt-get install -y --no-install-recommends \
 echo
 echo "installed. verify:"
 for p in pcl_ros serial_driver asio_cmake_module; do
-    if [ -d "/opt/ros/jazzy/share/$p" ]; then
+    if [ -d "/opt/ros/${ROS_DISTRO}/share/$p" ]; then
         echo "  OK   $p"
     else
         echo "  MISS $p"

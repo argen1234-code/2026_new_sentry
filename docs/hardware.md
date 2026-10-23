@@ -114,7 +114,7 @@ target：`sentry_2026_chassis`，最终底盘控制周期 **5 ms**，速度帧�
 单轮悬空测试使用 `can1_dmh6215_test` 选项：
 
 ```bash
-cd stm32_ws/Boards
+cd stm32_ws/legacy/Boards
 cmake -S . -B build/can_test -G Ninja \
   -DCMAKE_BUILD_TYPE=Debug -DROBOT_TARGET=can1_dmh6215_test
 cmake --build build/can_test
@@ -130,7 +130,7 @@ openocd -f interface/cmsis-dap.cfg -f target/stm32h7x.cfg \
 同时有反馈中断、位置变化和堵转兜底：
 
 ```bash
-cd stm32_ws/Boards
+cd stm32_ws/legacy/Boards
 cmake -S . -B build/can_safe -G Ninja \
   -DCMAKE_BUILD_TYPE=Debug \
   -DROBOT_TARGET=can1_dmh6215_test \
@@ -202,7 +202,7 @@ openocd -f interface/cmsis-dap.cfg -f target/stm32h7x.cfg \
 停止专用固件构建：
 
 ```bash
-cd stm32_ws/Boards
+cd stm32_ws/legacy/Boards
 cmake -S . -B build/can_stop -G Ninja \
   -DCMAKE_BUILD_TYPE=Debug \
   -DROBOT_TARGET=can1_dmh6215_test \

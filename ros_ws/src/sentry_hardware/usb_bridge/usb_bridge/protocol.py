@@ -20,7 +20,7 @@ ID_WHEEL_STATE = 0x83
 ID_IMU_STATE = 0x84
 
 # Keep these layouts in sync with
-# stm32_ws/Component/Communication/Src/communication_usb.h.
+# stm32_ws/legacy/Component/Communication/Src/communication_usb.h.
 UNIFIED_CMD_FMT = '<iiHiiiiHBiiQ'
 MCU_STATE_FMT = '<I8fBBH'
 MCU_HEARTBEAT_FMT = '<IBBH'

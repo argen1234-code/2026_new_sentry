@@ -98,7 +98,7 @@ u64 host_ts_ns
 
 ```bash
 cd ~/2026_new_sentry/ros_ws
-source /opt/ros/jazzy/setup.bash
+source /opt/ros/humble/setup.bash
 colcon build --symlink-install --packages-up-to usb_bridge
 source install/setup.bash
 

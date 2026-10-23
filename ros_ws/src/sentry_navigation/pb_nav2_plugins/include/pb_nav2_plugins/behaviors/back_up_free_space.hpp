@@ -55,14 +55,14 @@ public:
    * @param command Goal to execute
    * @return Status of behavior
    */
-  nav2_behaviors::ResultStatus onRun(
+  nav2_behaviors::Status onRun(
     const std::shared_ptr<const BackUpAction::Goal> command) override;
 
   /**
    * @brief Loop function to run behavior
    * @return Status of behavior
    */
-  nav2_behaviors::ResultStatus onCycleUpdate() override;
+  nav2_behaviors::Status onCycleUpdate() override;
 
 protected:
   /**
