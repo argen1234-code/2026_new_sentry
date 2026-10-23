@@ -24,6 +24,9 @@
   `ros_ws/src/sentry_hardware/usb_bridge/usb_bridge/cmd_vel_to_unified.py`
 - **验证方式**：自转方向只看 `/livox/imu` 的 `angular_velocity.z`（与 LIO 无关的独立信源）；
   平移看 `/odometry` 在起始车体系里的位移方向角。
+- **补充实测（2026-10-23，键盘直连）**：以雷达安装方向为 0°，`W/S/A/D` 的现实运动方向
+  分别为逆时针 135°、顺时针 45°、顺时针 135°、逆时针 45°，详见
+  [`chassis_speed_reference.md`](chassis_speed_reference.md) 第 3 节。
 - **日期**：2026-10-23
 
 ## 2. 底盘速度环跟不上目标（约 0.25 m/s 死区，稳态仅 ~35%）
@@ -43,6 +46,7 @@
 - **涉及文件**：`stm32_ws/` 底盘固件（速度环参数）
 - **验证方式**：重跑上表的 vx 阶跃，看稳态轮速是否达标
 - **日期**：2026-10-23
+- **参考**：推荐速度与方向约定见 [`chassis_speed_reference.md`](chassis_speed_reference.md)
 
 ## 3. `/livox/imu` 订阅读不到数据（QoS / 发现延迟）
 

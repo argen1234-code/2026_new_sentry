@@ -8,14 +8,14 @@ RoboMaster 2026 哨兵机器人工程。工程分层沿用 `2026_old_sentry` 的
 
 | 目录 | 职责 |
 |---|---|
-| `ros_ws/` | Jetson Orin Nano 上的 ROS 2 Jazzy 工作空间：感知、定位、导航、决策 |
-| `stm32_ws/` | STM32H723 控制板固件：云台/底盘/发射控制、裁判系统、传感器、通信 |
+| `ros_ws/` | Jetson Orin Nano 上的 ROS 2 Humble 工作空间：感知、定位、导航、决策 |
+| `stm32_ws/` | STM32H723 控制板固件：`legacy/` 原固件（CMake）与 `sentinel/` 上游新固件（Keil），两套独立工程 |
 | `docs/` | 跨端文档：架构、通信协议、构建与部署 |
 | `tools/` | 主机侧辅助脚本（协议生成、调试、部署） |
 
 ## 分层映射
 
-| 职责 | ROS 侧 | STM32 侧 |
+| 职责 | ROS 侧 | STM32 侧（`stm32_ws/legacy/`） |
 |---|---|---|
 | 纯算法 | `sentry_decision` / `sentry_navigation` 内部算法 | `Algorithm` |
 | 设备与驱动 | `sentry_hardware`（雷达、串口、USB 桥） | `Bsp` + `Devices` |
@@ -54,7 +54,7 @@ ROS 2 工作空间（Jetson 8 GiB 必须用低内存脚本，避免 OOM 卡死�
 
 ```bash
 cd ros_ws
-source /opt/ros/jazzy/setup.bash
+source /opt/ros/humble/setup.bash
 ./scripts/build_lowmem.sh
 source install/local_setup.bash
 ```
@@ -67,9 +67,12 @@ STM32 固件：见 [`stm32_ws/README.md`](stm32_ws/README.md) 和 [`docs/build.m
 - [`docs/protocol.md`](docs/protocol.md)：Jetson ↔ STM32 通信协议草案
 - [`docs/build.md`](docs/build.md)：构建、烧录、部署
 - [`docs/hardware.md`](docs/hardware.md)：底盘、电机 CAN 映射、控制模式与方向约定
+- [`docs/chassis_speed_reference.md`](docs/chassis_speed_reference.md)：推荐速度、死区、顺时针/逆时针与 `wz` 符号
+- [`docs/pitfalls.md`](docs/pitfalls.md)：踩坑记录（转向符号、速度环死区、IMU QoS）
 - [`docs/boot-fix.md`](docs/boot-fix.md)：MID360 插入时 Jetson 开机卡住的修复
 - [`ros_ws/README.md`](ros_ws/README.md)：ROS 功能包职责、低内存构建、MID360 网络
-- [`stm32_ws/README.md`](stm32_ws/README.md)：固件分层、target 约定与台架流程
+- [`stm32_ws/README.md`](stm32_ws/README.md)：两套固件工程的分工与解耦约定
+- [`stm32_ws/legacy/README.md`](stm32_ws/legacy/README.md)：原固件分层、target 约定与台架流程
 
 ## 开发原则
 
