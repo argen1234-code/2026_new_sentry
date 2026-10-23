@@ -2,12 +2,13 @@
  * Host-side unit test for Algorithm/Src/angle_pid.c.
  *
  * Build:
- *   cc -std=c11 -I tools/host_tests/shim -I stm32_ws/Algorithm/Src \
+ *   cc -std=c11 -I tools/host_tests/shim -I stm32_ws/legacy/Algorithm/Src \
  *      tools/host_tests/angle_pid_test.c \
- *      stm32_ws/Algorithm/Src/angle_pid.c \
- *      stm32_ws/Algorithm/Src/pid_core.c \
- *      stm32_ws/Algorithm/Src/pid_angle.c \
- *      stm32_ws/Algorithm/Src/pid.c -lm -o /tmp/angle_pid_test
+ *      stm32_ws/legacy/Algorithm/Src/angle_pid.c \
+ *      stm32_ws/legacy/Algorithm/Src/pid_core.c \
+ *      stm32_ws/legacy/Algorithm/Src/pid_angle.c \
+ *      stm32_ws/legacy/Algorithm/Src/pid_linear.c \
+ *      stm32_ws/legacy/Algorithm/Src/pid.c -lm -o /tmp/angle_pid_test
  */
 
 #include "angle_pid.h"
