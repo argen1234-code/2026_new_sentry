@@ -71,20 +71,28 @@
        to make the red +X arrow point at the nose; the arrow follows the
        sensor, not the chassis. -->
   <xacro:property name="lidar_mount_radius" value="0.20"/>
-  <xacro:property name="lidar_mount_angle" value="${-pi / 2}"/>
+  <xacro:property name="lidar_mount_angle" value="0.0"/>
   <xacro:property name="lidar_x" value="${lidar_mount_radius * cos(lidar_mount_angle)}"/>
   <xacro:property name="lidar_y" value="${lidar_mount_radius * sin(lidar_mount_angle)}"/>
   <xacro:property name="lidar_radius" value="0.0325"/>
   <xacro:property name="lidar_height" value="0.06"/>
-  <xacro:property name="lidar_yaw" value="${-pi / 2}"/>
-  <!-- Height of the measurement origin above the ground, fitted from the
-       point cloud on 2026-10-23: the floor plane sits 0.120 m below the
-       sensor origin (1814 inliers over 1.1-4.6 m, ~180 deg azimuth, plane
-       rms 1.0 cm, no drift with range).  That is also where the floor first
-       becomes visible (~1.1 m out, the MID360 only looks 7 deg down).
-       The sensor is 1.4 deg off level (pitch 0.75 deg, roll 1.17 deg);
-       too small to encode, so the joint keeps a pure yaw. -->
-  <xacro:property name="lidar_z" value="0.12"/>
+  <xacro:property name="lidar_yaw" value="0.0"/>
+  <!-- Height of the measurement origin above the ground, measured on
+       2026-10-24 by static calibration (docs/chassis_calibration.md): the
+       floor plane sits 0.196 m below the sensor origin, fitted on 1370
+       "flat" 5 cm cells (mesh z-spread < 3 cm, so obstacle voxels are
+       excluded) over 1.2-5.5 m, plane rms 6.9 mm, residual flat with range.
+       Agrees with the tape measure (0.20 m to the housing top).
+       Earlier value 0.120 m (2026-10-23) was a biased fit: it used a sparse
+       cloud and RANSAC latched onto a plane bridging the near floor with
+       far obstacle tops.
+       The sensor is pitched down 2.29 deg (roll ~0).  That is assembly
+       error and is deliberately NOT encoded here, so the joint keeps a pure
+       yaw and base_footprint stays parallel to the sensor.
+       NOTE: lidar_z also drives the point-cloud lift in loam_interface, so
+       pointcloud_to_laserscan.min_height must be re-measured alongside it
+       (docs/chassis_calibration.md 4.1). -->
+  <xacro:property name="lidar_z" value="0.200"/>
 
   <material name="body_gray"><color rgba="0.72 0.75 0.79 1.0"/></material>
   <material name="body_dark"><color rgba="0.28 0.30 0.34 1.0"/></material>

@@ -137,10 +137,10 @@ terrain_analysis:
 terrain_analysis_ext:
   ros__parameters:
     scanVoxelSize: 0.1
-    decayTime: 1.0    # 降低到1秒，动态障碍物快速清除
+    decayTime: 2.0    # 降低到1秒，动态障碍物快速清除
     noDecayDis: 0.0   # 关闭不衰减区域，所有点云都会按时间衰减
     clearingDis: 0.35  # 过滤车体中心0.35m内的点云（车体约0.45x0.25）
-    useSorting: false
+    useSorting: true
     quantileZ: 0.2
     vehicleHeight: 0.8
     voxelPointUpdateThre: 100
@@ -152,7 +152,7 @@ terrain_analysis_ext:
     terrainUnderVehicle: -0.12       # 点云标定的雷达到地面高度（2026-10-23 实测 0.120 m）
     terrainConnThre: 0.5
     ceilingFilteringThre: 2.0
-    localTerrainMapRadius: 4.0
+    localTerrainMapRadius: 6.0
 
 fake_vel_transform:
   ros__parameters:
@@ -190,9 +190,9 @@ pointcloud_to_laserscan:
   ros__parameters:
     use_sim_time: False
     target_frame: base_footprint
-    min_height: 0.08
-    max_height: 1.0
-    min_intensity: 0.5
+    min_height: 0.16
+    max_height: 1.08
+    min_intensity: 0.20
     max_intensity: 2.0
     angle_min: -3.1415926                   # -M_PI/2
     angle_max: 3.1415926                    # M_PI/2
@@ -231,10 +231,10 @@ slam_toolbox:
     scan_queue_size: 10
     # >0 才会发布 map->odom；建图+导航时由 slam_toolbox 负责该 TF。
     # 为 0 时依赖 launch 里的静态 map->odom，扫描匹配修正无法反映到位姿。
-    transform_publish_period: 0.02
+    transform_publish_period: 0.0
     map_update_interval: 0.5
     resolution: 0.05
-    min_laser_range: 0.4                         # for rastering images
+    min_laser_range: 0.3                         # for rastering images
     max_laser_range: 10.0                         # for rastering images
     minimum_time_interval: 0.2
     transform_timeout: 0.2
@@ -245,23 +245,23 @@ slam_toolbox:
     # General Parameters
     # 原值为 false：完全信任 Point-LIO 里程计，手推/抬动时漂移会直接把墙抹成
     # 扇形。开启后 slam_toolbox 会把每帧扫描配准到已有地图，边界更连续。
-    use_scan_matching: true
+    use_scan_matching: false
     use_scan_barycenter: true
     minimum_travel_distance: 0.1
     minimum_travel_heading: 0.1
     scan_buffer_size: 10
     scan_buffer_maximum_scan_distance: 10.0
-    link_match_minimum_response_fine: 0.2
-    link_scan_maximum_distance: 3.0
+    link_match_minimum_response_fine: 0.1
+    link_scan_maximum_distance: 1.5
     loop_search_maximum_distance: 3.0
-    do_loop_closing: true
+    do_loop_closing: false
     loop_match_minimum_chain_size: 10
     loop_match_maximum_variance_coarse: 3.0
     loop_match_minimum_response_coarse: 0.35
     loop_match_minimum_response_fine: 0.45
 
     # Correlation Parameters - Correlation Parameters
-    correlation_search_space_dimension: 1.0
+    correlation_search_space_dimension: 0.5
     correlation_search_space_resolution: 0.01
     correlation_search_space_smear_deviation: 0.1
 

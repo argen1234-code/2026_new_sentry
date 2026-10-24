@@ -10,7 +10,7 @@ loam_interface:
 terrain_analysis:
   ros__parameters:
     scanVoxelSize: 0.05
-    decayTime: 1.0
+    decayTime: 0.5
     noDecayDis: 0.0
     clearingDis: 0.35
     useSorting: true
@@ -39,10 +39,10 @@ terrain_analysis:
 terrain_analysis_ext:
   ros__parameters:
     scanVoxelSize: 0.1
-    decayTime: 1.0
+    decayTime: 2.0
     noDecayDis: 0.0
     clearingDis: 0.35
-    useSorting: false
+    useSorting: true
     quantileZ: 0.2
     vehicleHeight: 0.8
     voxelPointUpdateThre: 100
