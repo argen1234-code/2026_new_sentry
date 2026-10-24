@@ -29,6 +29,15 @@ COMMS=(
   fake_vel_transf
   usb_bridge
   cmd_vel_to_unif
+  # The five below were missing and survived as orphans (2026-10-24): a stop
+  # printed "ROS stack stopped" while ten of them were still alive in two
+  # generations.  referee_serial_ also kept /dev/ttyACM0 locked, so the next
+  # bringup lost the referee serial port.
+  joy_node
+  pb_teleop_twist
+  referee_serial_
+  sentry_decision
+  static_transfor
 )
 
 for name in "${COMMS[@]}"; do
@@ -50,8 +59,24 @@ for pid in $(pgrep -f "ros2 launch sentry_bringup" 2>/dev/null); do
 done
 
 sleep 1
-if pgrep -x usb_bridge >/dev/null 2>&1 || pgrep -x pointlio_mappin >/dev/null 2>&1; then
-  echo "warning: some stack processes are still running"
+
+# Health check: every name in the list must be gone, not just the two that
+# matter most.  The old two-name check is what let the orphaned set above go
+# unnoticed.
+leftover=()
+for name in "${COMMS[@]}"; do
+  pgrep -x "$name" >/dev/null 2>&1 && leftover+=("$name")
+done
+if pgrep -f "ros2 launch sentry_bringup" >/dev/null 2>&1; then
+  leftover+=("ros2 launch sentry_bringup")
+fi
+
+if [ ${#leftover[@]} -gt 0 ]; then
+  echo "warning: still running: ${leftover[*]}"
+  echo "these are the pids:"
+  for name in "${leftover[@]}"; do
+    pgrep -a -f "$name" 2>/dev/null
+  done
   exit 1
 fi
 echo "ROS stack stopped"
