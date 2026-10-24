@@ -36,6 +36,9 @@ from rclpy.node import Node
 
 PERIOD_S = 0.02          # 50 Hz, same as cmd_vel_to_unified
 HOLD_S = 0.60            # a key is considered held while its repeats arrive
+REPEAT_GUARD_S = 0.70    # keys closer than this are auto-repeat, not a new press
+NAV2_YIELD_S = 0.50      # stop publishing while Nav2 sent a nonzero twist this recently
+NAV2_EPS = 1e-3
 STOP_KEY = ' '
 
 DIRECTION_KEYS = {
@@ -56,6 +59,12 @@ def parse_args(argv=None):
     parser.add_argument('--wz', type=float, default=1.00, help='rad/s')
     parser.add_argument('--hold', type=float, default=HOLD_S,
                         help='seconds a key stays active after its last repeat')
+    parser.add_argument('--mode', choices=('toggle', 'hold'), default='toggle',
+                        help='toggle: 点一下切换、再点一下取消; hold: 按住才走')
+    parser.add_argument('--repeat-guard', type=float, default=REPEAT_GUARD_S,
+                        help='toggle mode: ignore a repeated key closer than this (s)')
+    parser.add_argument('--nav2-topic', default='cmd_vel_nav2_result',
+                        help='Nav2 velocity topic to yield to; empty string disables yielding')
     # Ignore ROS args so `ros2 run`-style remapping does not trip argparse.
     args, _ = parser.parse_known_args(argv)
     return args
@@ -86,6 +95,18 @@ def main():
     node = Node('keyboard_teleop_ros')
     pub = node.create_publisher(Twist, '/cmd_vel', 10)
 
+    # Nav2 owns the chassis while it is driving; watch its output so this node
+    # can step aside instead of interleaving twists on /cmd_vel.
+    nav2_state = {'last_active': float('-inf')}
+
+    def nav2_cb(msg):
+        if (abs(msg.linear.x) > NAV2_EPS or abs(msg.linear.y) > NAV2_EPS
+                or abs(msg.angular.z) > NAV2_EPS):
+            nav2_state['last_active'] = time.monotonic()
+
+    if args.nav2_topic:
+        node.create_subscription(Twist, args.nav2_topic, nav2_cb, 10)
+
     stdin_fd = sys.stdin.fileno()
     is_tty = sys.stdin.isatty()
     old_term = termios.tcgetattr(stdin_fd) if is_tty else None
@@ -109,16 +130,36 @@ def main():
 
     print('ROS keyboard teleop -> /cmd_vel (via cmd_vel_to_unified -> usb_bridge)')
     show_speed()
-    print('  按住方向键移动，松开约 %.0f ms 后停；空格立即停，+/- 调速。'
-          % (args.hold * 1000))
+    if args.mode == 'toggle':
+        print('  点一下方向键开始、再点一下停止；空格全停，+/- 调速。'
+              '同一键 %.1f s 内的连点只算一次。' % args.repeat_guard)
+        print('  !!! 切走终端焦点不会自动停车，离开前先按空格。')
+    else:
+        print('  按住方向键移动，松开约 %.0f ms 后停；空格立即停，+/- 调速。'
+              % (args.hold * 1000))
     print('  Ctrl-C 退出。\n', flush=True)
 
-    active = {}
+    active = {}          # hold mode: key -> last repeat time
+    toggle_on = set()    # toggle mode: directions currently latched
+    last_char = {}       # toggle mode: key -> last char time (repeat guard)
     last_state = None
+    yielding = False
 
     try:
         while rclpy.ok():
+            rclpy.spin_once(node, timeout_sec=0)
             now = time.monotonic()
+
+            now_yielding = (now - nav2_state['last_active']) < NAV2_YIELD_S
+            if now_yielding != yielding:
+                yielding = now_yielding
+                last_state = None
+                if yielding:
+                    active.clear()
+                    toggle_on.clear()
+                    print('  [YIELD] Nav2 正在控车，键盘已让行（取消目标后自动恢复）', flush=True)
+                else:
+                    print('  [READY] Nav2 已停止，键盘可用', flush=True)
 
             while True:
                 ready, _, _ = select.select([stdin_fd], [], [], 0)
@@ -130,9 +171,30 @@ def main():
                 for ch in data.decode(errors='ignore'):
                     key = ch.lower()
                     if key in DIRECTION_KEYS:
-                        active[key] = now
+                        # Do not latch or steer while Nav2 drives; otherwise the
+                        # car would jump the moment the goal is cancelled.
+                        if yielding:
+                            continue
+                        if args.mode == 'hold':
+                            active[key] = now
+                        else:
+                            prev = last_char.get(key)
+                            last_char[key] = now
+                            # A held key repeats every ~33 ms; only the first
+                            # character counts as a new press.
+                            if prev is not None and now - prev < args.repeat_guard:
+                                continue
+                            axis, _ = DIRECTION_KEYS[key]
+                            if key in toggle_on:
+                                toggle_on.discard(key)
+                            else:
+                                for other in list(toggle_on):
+                                    if DIRECTION_KEYS[other][0] == axis:
+                                        toggle_on.discard(other)
+                                toggle_on.add(key)
                     elif key == STOP_KEY:
                         active.clear()
+                        toggle_on.clear()
                     elif key in ('+', '='):
                         scale = min(2.0, round(scale + 0.1, 1))
                         show_speed()
@@ -140,17 +202,27 @@ def main():
                         scale = max(0.1, round(scale - 0.1, 1))
                         show_speed()
 
-            for key in list(active):
-                if now - active[key] > args.hold:
-                    del active[key]
+            if yielding:
+                # Publishing a zero twist here would still fight Nav2 on
+                # /cmd_vel, so stay completely silent while it drives.
+                time.sleep(PERIOD_S)
+                continue
 
-            vx, vy, wz, moving = build_twist(active, max_v())
+            if args.mode == 'hold':
+                for key in list(active):
+                    if now - active[key] > args.hold:
+                        del active[key]
+                pressed = active
+            else:
+                pressed = toggle_on
+
+            vx, vy, wz, moving = build_twist(pressed, max_v())
             publish(vx, vy, wz)
 
             state = (round(vx, 3), round(vy, 3), round(wz, 3))
             if state != last_state:
                 print('  [%s] vx=%+.2f vy=%+.2f wz=%+.2f'
-                      % ('ENABLED' if moving else 'stop', vx, vy, wz), flush=True)
+                      % ('ON ' if moving else 'OFF', vx, vy, wz), flush=True)
                 last_state = state
 
             time.sleep(PERIOD_S)

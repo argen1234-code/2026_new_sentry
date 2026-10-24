@@ -45,7 +45,7 @@ class CmdVelToUnified(Node):
         # 两次独立测量），即底盘轮系坐标系相对 base_footprint 转过 45 度。
         # 固件侧只做了自转方向（wz 取负）的修正，平移的 45 度在这里补偿。
         # 该参数每 tick 重读，`ros2 param set` 即时生效，无需重启。
-        self.declare_parameter('frame_yaw', -0.7853981633974483)
+        self.declare_parameter('frame_yaw', -2.356194490192345)
         # wz keeps its own sign (rotation axis is not affected by frame_yaw).
         self.declare_parameter('sign_wz', 1.0)
 
