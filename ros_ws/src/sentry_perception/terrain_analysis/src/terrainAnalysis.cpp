@@ -32,7 +32,7 @@ double scanVoxelSize = 0.05;
 double decayTime = 2.0;
 double noDecayDis = 4.0;
 double clearingDis = 8.0;
-bool clearingCloud = true;  // 默认启用，始终过滤车体内部点云
+bool clearingCloud = false;
 bool useSorting = true;
 double quantileZ = 0.25;
 bool considerDrop = false;
@@ -632,8 +632,8 @@ int main(int argc, char ** argv)
           }
         }
       }
-// clearingCloud = false;  // 注释掉，保持clearingCloud始终为true以持续过滤车体内部点云
 
+      clearingCloud = false;
 
       // publish points with elevation
       sensor_msgs::msg::PointCloud2 terrainCloud2;

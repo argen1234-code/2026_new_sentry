@@ -137,7 +137,7 @@ terrain_analysis:
 terrain_analysis_ext:
   ros__parameters:
     scanVoxelSize: 0.1
-    decayTime: 2.0    # 降低到1秒，动态障碍物快速清除
+    decayTime: 0.2    # 降低到1秒，动态障碍物快速清除
     noDecayDis: 0.0   # 关闭不衰减区域，所有点云都会按时间衰减
     clearingDis: 0.35  # 过滤车体中心0.35m内的点云（车体约0.45x0.25）
     useSorting: true
@@ -191,7 +191,7 @@ pointcloud_to_laserscan:
     use_sim_time: False
     target_frame: base_footprint
     min_height: 0.16
-    max_height: 1.08
+    max_height: 0.50
     min_intensity: 0.20
     max_intensity: 2.0
     angle_min: -3.1415926                   # -M_PI/2
@@ -234,7 +234,7 @@ slam_toolbox:
     transform_publish_period: 0.0
     map_update_interval: 0.5
     resolution: 0.05
-    min_laser_range: 0.3                         # for rastering images
+    min_laser_range: 0.5                         # for rastering images
     max_laser_range: 10.0                         # for rastering images
     minimum_time_interval: 0.2
     transform_timeout: 0.2
@@ -285,19 +285,20 @@ bt_navigator:
   ros__parameters:
     use_sim_time: False
     global_frame: map
-    robot_base_frame: base_footprint
-    # robot_base_frame: gimbal_yaw_fake
+    # 与母工程一致：gimbal_yaw_fake 是 fake_vel_transform 以 50 Hz 发布的“去掉云台
+    # 旋转”参考帧，local/global costmap 与 behavior_server 都在用它。今天
+    # use_gimbal: false 时它与 base_footprint 完全重合（只差 0.075 m 的 z），接真云台
+    # 后两者偏航不同，必须统一用 fake 帧，否则 BT 与代价地图会各算各的。
+    robot_base_frame: gimbal_yaw_fake
     odom_topic: odometry
     bt_loop_duration: 10
     default_server_timeout: 300  # 增加到300秒，让目标有更多时间完成
     wait_for_service_timeout: 1000
-    action_server_result_timeout: 900.0  # 增加action超时时间
-    # Jazzy 下两个 navigator 会重复注册同一套 BT 节点（ID already registered），
-    # 当前只保留 NavigateToPose；需要多点导航时再排查。
-    navigators: ["navigate_to_pose"]
-    navigate_to_pose:
-      plugin: "nav2_bt_navigator::NavigateToPoseNavigator"
-      plugin_lib_names:
+    # Humble 的 bt_navigator（1.1.20）只声明顶层的 plugin_lib_names，没有 Iron+ 那套
+    # `navigators` / `navigate_to_pose.plugin` 结构（已核对 libbt_navigator_core.so 的
+    # 参数名字符串表）。原先照 Jazzy 模板写的嵌套段在 Humble 上整段被忽略，这里改回
+    # 母工程的顶层写法，让这份清单真正生效。
+    plugin_lib_names:
       - nav2_compute_path_to_pose_action_bt_node
       - nav2_compute_path_through_poses_action_bt_node
       - nav2_smooth_path_action_bt_node
@@ -345,8 +346,6 @@ bt_navigator:
       - nav2_assisted_teleop_cancel_bt_node
       - nav2_drive_on_heading_cancel_bt_node
       - nav2_is_battery_charging_condition_bt_node
-    navigate_through_poses:
-      plugin: "nav2_bt_navigator::NavigateThroughPosesNavigator"
     default_nav_to_pose_bt_xml: $(find-pkg-share pb2025_nav_bringup)/behavior_trees/navigate_to_pose_w_replanning_and_recovery.xml
     default_nav_through_poses_bt_xml: $(find-pkg-share pb2025_nav_bringup)/behavior_trees/navigate_through_poses_w_replanning_and_recovery.xml
 
@@ -392,8 +391,12 @@ controller_server:
       use_interpolation: true  # 启用插值，使路径更平滑
       use_rotate_to_heading: true  # 启用先转向再移动，角度偏差大时先原地转向
       use_rotate_to_heading_treshold: 0.7   # 偏角阈值（弧度，约28.6度），超过此值先原地转向
-      rotate_to_heading_angular_vel: 0.8    # 底盘基础角速度 1.0 rad/s
-      max_angular_accel: 3.0                # 底盘旋转斜坡 4.0 rad/s^2
+      # rotate_to_heading_angular_vel / max_angular_accel 已删：这两个是 nav2
+      # RotationShimController 的参数，pb_omni_pid_pursuit_controller 1.0.4 不声明它们，
+      # 写在这里是静默无效的。原地转向角速度由 v_angular_* 决定。
+      # 下面两个插件声明了但原先没写（走插件默认值），母工程显式写出，这里补齐：
+      approach_velocity_scaling_dist: 0.6   # 距终点 0.6 m 内按比例减速
+      min_approach_linear_velocity: 0.05    # 减速下限，避免末端爬行
       v_linear_min: -0.45                   # 底盘基础速度 0.45 m/s
       v_linear_max: 0.45
       v_angular_min: -1.0
@@ -428,13 +431,15 @@ local_costmap:
         footprint_clearing_enabled: true
         publish_voxel_map: false
         combination_method: 1
+        use_footprint_filter: true
+        footprint_padding: 0.09  # 0.26 (robot_radius) + 0.09 = 0.35，等价原 clearingDis
         mark_threshold: 0
         origin_z: 0.0
         unknown_threshold: 5
         z_resolution: 0.05
         z_voxels: 16
-        min_obstacle_height: 0.0
-        max_obstacle_height: 2.0
+        min_obstacle_height: 0.15
+        max_obstacle_height: 0.50
         min_obstacle_intensity: 0.1
         max_obstacle_intensity: 2.0
         observation_sources: terrain_map
@@ -444,8 +449,8 @@ local_costmap:
           # It doesn't need to start with '/'
           topic: <robot_namespace>/terrain_map
           sensor_frame: front_mid360
-          min_obstacle_height: 0.0
-          max_obstacle_height: 2.0
+          min_obstacle_height: 0.15
+          max_obstacle_height: 0.50
           obstacle_max_range: 5.0
           obstacle_min_range: 0.2
 
@@ -482,13 +487,15 @@ global_costmap:
         footprint_clearing_enabled: true
         publish_voxel_map: false
         combination_method: 1
+        use_footprint_filter: true
+        footprint_padding: 0.09  # 0.26 (robot_radius) + 0.09 = 0.35，等价原 clearingDis
         mark_threshold: 0
         origin_z: 0.0
         unknown_threshold: 5
         z_resolution: 0.05
         z_voxels: 16
-        min_obstacle_height: 0.0
-        max_obstacle_height: 2.0
+        min_obstacle_height: 0.15
+        max_obstacle_height: 0.50
         min_obstacle_intensity: 0.1
         max_obstacle_intensity: 2.0
         observation_sources: terrain_map_ext
@@ -498,8 +505,8 @@ global_costmap:
           # It doesn't need to start with '/'
           topic: <robot_namespace>/terrain_map_ext
           sensor_frame: front_mid360
-          min_obstacle_height: 0.0
-          max_obstacle_height: 2.0
+          min_obstacle_height: 0.15
+          max_obstacle_height: 0.50
           obstacle_max_range: 10.0
           obstacle_min_range: 0.2
       static_layer:
@@ -530,7 +537,8 @@ planner_server:
   ros__parameters:
     use_sim_time: False
     expected_planner_frequency: 5.0  # 降低规划频率，减少路径跳动
-    action_server_result_timeout: 300.0  # 增加规划器超时时间
+    # action_server_result_timeout 已删：Humble 1.1.20 的任何库里都没有这个参数名
+    # （已 grep 整个 /opt/ros/humble/lib），它是 Nav2 Iron+ 才有的键，写在这里无效。
     planner_plugins: ["GridBased"]
     GridBased:
       # 插件名必须与插件 XML 里的 name 完全一致：本机 nav2 1.1.20 声明的是
