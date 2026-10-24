@@ -11,7 +11,7 @@ from launch.actions import (
     OpaqueFunction,
     TimerAction,
 )
-from launch.conditions import IfCondition, LaunchConfigurationEquals
+from launch.conditions import IfCondition, LaunchConfigurationEquals, UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
@@ -101,6 +101,11 @@ def generate_launch_description():
             description="Chassis command transport: USB CDC bridge or legacy UDP",
         ),
         DeclareLaunchArgument(
+            "slam",
+            default_value="false",
+            description="true = real-time mapping + Nav2 (collect a prior map); false = GICP localization + Nav2",
+        ),
+        DeclareLaunchArgument(
             "enable_motion",
             default_value="false",
             description="Allow /cmd_vel to drive the chassis over USB (safety gate)",
@@ -150,13 +155,18 @@ def generate_launch_description():
         Node(package="rclcpp_components", executable="component_container_isolated",
              name="nav2_container", output="screen",
              parameters=[configured_params, {"autostart": autostart}]),
-        # Localization, not mapping: GICP matches against the prior PCD and the
-        # 2D map comes from map_server.  Real-time mapping runs through
-        # sentry_bringup/mapping.launch.py (teleop mapping) instead.
+        # One entry, two modes.  slam:=false matches the prior PCD with GICP and
+        # takes the 2D map from map_server; slam:=true builds both from the live
+        # lidar and keeps Nav2 running so the venue can be driven through goals.
         include("sentry_localization", "localization.launch.py", {
             "map": LaunchConfiguration("map"),
             "prior_pcd_file": LaunchConfiguration("prior_pcd_file"),
-        }),
+        }, condition=UnlessCondition(LaunchConfiguration("slam"))),
+        include("sentry_localization", "mapping.launch.py", {
+            "nav2_params_file": resolved_params,
+            "use_sim_time": use_sim_time,
+            "autostart": autostart,
+        }, condition=IfCondition(LaunchConfiguration("slam"))),
         include("pb2025_nav_bringup", "navigation_launch.py", {
             "params_file": resolved_params, "use_sim_time": use_sim_time,
             "autostart": autostart, "use_composition": "True",
