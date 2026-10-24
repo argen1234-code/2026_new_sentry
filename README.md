@@ -68,6 +68,8 @@ STM32 固件：见 [`stm32_ws/README.md`](stm32_ws/README.md) 和 [`docs/build.m
 - [`docs/build.md`](docs/build.md)：构建、烧录、部署
 - [`docs/hardware.md`](docs/hardware.md)：底盘、电机 CAN 映射、控制模式与方向约定
 - [`docs/chassis_speed_reference.md`](docs/chassis_speed_reference.md)：推荐速度、死区、顺时针/逆时针与 `wz` 符号
+- [`docs/localization_roadmap.md`](docs/localization_roadmap.md)：定位与建图规划（位姿源、GICP、2D 栅格职责、未来里程计接入）
+- [`docs/chassis_calibration.md`](docs/chassis_calibration.md)：地面与遮挡区标定（换底盘必做；URDF 的高度与姿态不可信，须实测）
 - [`docs/pitfalls.md`](docs/pitfalls.md)：踩坑记录（转向符号、速度环死区、IMU QoS）
 - [`docs/boot-fix.md`](docs/boot-fix.md)：MID360 插入时 Jetson 开机卡住的修复
 - [`ros_ws/README.md`](ros_ws/README.md)：ROS 功能包职责、低内存构建、MID360 网络

@@ -107,6 +107,10 @@ Nav2、Point-LIO、terrain、USB 桥都按这些名字引用（导出里的 `bas
 
 若再换一版模型，直接新建 URDF 并用 `robot_description_file:=<path>` 指定。
 
+> **URDF 里的雷达 z 与姿态不可信，必须实测**：新底盘装配误差会让实际离地高度与设计值
+> 差好几厘米（2026-10-24 实测：URDF 0.120 m，真实 0.196 m，偏小 7.6 cm）。
+> 测量方法与配套脚本见 [`chassis_calibration.md`](chassis_calibration.md)。
+
 ### 3.2 STM32 固件
 
 文件：
@@ -179,7 +183,7 @@ Nav2、Point-LIO、terrain、USB 桥都按这些名字引用（导出里的 `bas
 | costmap `min/max_obstacle_height` | 0.0–1.0 m | 新车体高度 |
 | `terrainUnderVehicle` | -0.12 | 新雷达离地高度（点云实测，取负值） |
 | `minRelZ/maxRelZ/lowerBoundZ/upperBoundZ` | -0.35/0.8, -0.6/0.8 | 重新标定 |
-| `pointcloud_to_laserscan.min_height/max_height` | 0.08 / 1.0 | 重新标定 |
+| `pointcloud_to_laserscan.min_height/max_height` | 0.15 / 1.07 | 重新标定，且必须与 `lidar_z` 同步改 |
 | `fake_vel_transform.use_gimbal` | `False` | 正式云台车改 `True` |
 
 文件：`ros_ws/src/sentry_hardware/usb_bridge/usb_bridge/cmd_vel_to_unified.py`
@@ -206,6 +210,11 @@ Nav2、Point-LIO、terrain、USB 桥都按这些名字引用（导出里的 `bas
 
 MID360 安装位姿变化后，`terrainUnderVehicle`、`minRelZ/maxRelZ`、
 `pointcloud_to_laserscan.min_height/max_height` 都要重新标定。
+
+> 标定流程（采集 → 拟合 → 换算参数 → 验收判据）见
+> [`chassis_calibration.md`](chassis_calibration.md)，分析用
+> `ros_ws/tools/calib_ground.py <bag>`。注意 `lidar_z` 与 `min_height` 必须一起改，
+> 只改一个是错的（原因见该文档 §4.1）。
 
 ---
 
