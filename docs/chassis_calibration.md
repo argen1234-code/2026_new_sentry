@@ -173,6 +173,11 @@ URDF 的 `base→lidar` 偏移；而 `sensor_scan_generation` 里同一个偏移
 2026-10-24 的取值：`lidar_z 0.196`、`min_height 0.15`、`max_height 1.07`
 （改动前是 0.12 / 0.08 / 1.0）。
 
+> **后续修订（commit `f890f77` → `56d562c`）**：`lidar_z` 最终填 **0.200**（卷尺复核值），
+> 高度带最终是 **`0.16 / 0.50`**——上沿按 Humble 的导航高度闸门收紧，与代价地图
+> `min/max_obstacle_height` 对齐。以 `nav2_params.yaml` 为准，见
+> [`parameters.md`](parameters.md) §2。
+
 ### 4.2 其余高度类参数
 
 | 参数 | 依据 | 2026-10-24 实测 |

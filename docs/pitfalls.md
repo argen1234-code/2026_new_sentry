@@ -71,6 +71,11 @@
 - **验证方式**：建图时 `ros2 topic hz /obstacle_scan` ≈10–20 Hz；跑完后看 `map_saver_cli` 的
   occupied/free/unknown 比例
 - **日期**：2026-10-23
+- **已修订（2026-10-24）**：上述数值已过期。实际生效的是 `nav2_params.yaml` 的
+  `terrain_analysis_ext.localTerrainMapRadius: 6.0`、`pointcloud_to_laserscan`
+  高度带 **0.16–0.50 m**、量程 0.5–10.0 m；本条引用的
+  `sentry_localization_bringup/config/slam_toolbox.yaml` 当前**没有被任何 launch 加载**。
+  实测比例见 [`corridor_baseline.md`](corridor_baseline.md)：occupied 1.8% / free 26.7% / unknown 71.5%。
 
 ## 5. GICP 看起来「偏了 90°」，其实是先验坐标系的比对基准错了
 
@@ -165,3 +170,94 @@
   `sentry_localization_bringup/launch/{mapping,localization}.launch.py`
 - **验证方式**：启动时看 point_lio 订阅到的参数（`ros2 param get /point_lio filter_size_surf`）
 - **日期**：2026-10-23
+
+## 12. 静止起栈时 `/map` 是 0×0，`planner_server` 永久死锁
+
+- **现象**：`slam:=true` 起栈后车不动，发导航目标后 `planner_server` 接受目标却永不返回
+  （连 `(0,0)` 都挂住），容器 CPU 接近空闲——所有线程都在 sleeping。
+  日志里两个代价地图反复报 `Received map message is malformed. Rejecting.`
+- **根因**：`slam_toolbox` 的 `minimum_travel_distance / minimum_travel_heading = 0.1`，
+  车完全静止时一帧都不入图，按 2 Hz 持续发布 **width=0 height=0 的空图**。第一个目标永久占住
+  `plan_mutex`，后续全部排队。
+- **修正**：发目标前先看 `/map` 的 width/height，非 0 再发。空图时用键盘遥控先走 0.5 m 让 slam
+  入第一帧，或改 yaml 把两个门限设为 0（`minimum_travel_distance` 在 configure 时被缓存成成员
+  变量，运行时 `ros2 param set` **无效**，必须改 yaml 重启）。
+- **涉及文件**：`pb2025_nav_bringup/config/reality/nav2_params.yaml`（`slam_toolbox` 块）、
+  `pb2025_nav_bringup/config/reality/nav2_params.yaml`（local/global 的 `static_layer`）
+- **验证方式**：`ros2 topic echo --once /map --field info` 看 width/height；
+  `grep -c malformed` 应为 0（死锁时实测 150 s 内 1530 次）
+- **日期**：2026-10-24
+
+## 13. 建图收尾时地形节点 SIGABRT（-6）、Nav2 容器被 SIGKILL
+
+- **现象**：Ctrl-C 停栈后 `launch.log` 报 `terrainAnalysis` / `terrainAnalysisExt` 与
+  `livox_ros_driver2_node` 以 **exit code -6（SIGABRT）** 退出；
+  `component_container_isolated`（nav2）与 `referee_serial_bridge_node` 收到 SIGINT 5 s 无响应，
+  升级 SIGTERM 后仍无响应，最后被 **SIGKILL**。
+- **根因**：未定。只发生在关闭阶段，运行期间 0 条 ERROR，不影响本次建图结果
+  （`scans.pcd` 仍按预期在 16:55:49 写盘）。
+- **修正**：暂无。判读一份包之前先看 `launch.log` 里这些错误的时间戳是否全在收尾窗口内——
+  是则属于已知关闭噪声，不是运行期故障。
+- **涉及文件**：无（`terrain_analysis*` 的析构顺序 / `livox_ros_driver2` 的退出路径待查）
+- **验证方式**：`awk '{t=substr($1,1,10); if (t>START && t<END && $0~/\[ERROR\]/) c++} END{print c+0}' launch.log`
+- **日期**：2026-10-24
+
+## 14. `scans.pcd` 每次建图重写，体积进 git 不合适
+
+- **现象**：每次 `slam:=true` 跑完，`ros_ws/src/sentry_localization/point_lio/PCD/scans.pcd`
+  都会被重写；一次 15 m 走廊来回就长到 **153 MB**（此前一次是 42.8 MB，仓库里原本只有
+  298 KB）。`git status` 因此长期挂着一个巨大的二进制改动。
+- **根因**：`point_lio` 的 `pcd_save.pcd_save_en` 在建图入口打开，产物直接落在源码树内。
+- **修正**：该文件不应进版本库。建议加入 `.gitignore` 并 `git rm --cached`（**未执行，待决定**）。
+- **涉及文件**：`ros_ws/src/sentry_localization/point_lio/PCD/scans.pcd`、`.gitignore`
+- **验证方式**：`git status --short | grep scans.pcd` 应无输出
+- **日期**：2026-10-24
+
+## 15. 膨胀带只有 2 格时，规划器完全没有居中倾向
+
+- **现象**：2.3–4.3 m 宽的走廊，全局路径从墙边走、车在走廊里横向摆幅 1.14 m，
+  怎么看都像"走到哪算哪"，但规划没有报错、也不撞。
+- **根因**：`inflation_radius: 0.35` 与 `robot_radius: 0.26` 只差 **0.09 m（2 格）**，
+  `cost_scaling_factor: 5.0` 又让代价在出内切圈第 2 格就衰减到 63。
+  实测基线包的 `/local_costmap/costmap` 整张图只有 **12 个取值**，离墙 0.10 m 以外全是 0。
+  Theta* 的单格代价是 `26 + 0.9 × costmap_cost`，代价场一片 0 就等于按最短线走。
+- **修正**：把半径铺到走廊半宽量级——现为 `inflation_radius: 1.04`、`cost_scaling_factor: 3.0`
+  （`1.04 = 0.26 + 3×0.26`）。加大半径**不会**引起误判碰撞：控制器只在
+  `getCost >= INSCRIBED_INFLATED_OBSTACLE (253)` 时判碰撞，那圈由 `robot_radius` 决定。
+- **涉及文件**：`pb2025_nav_bringup/config/reality/nav2_params.yaml`（local/global 两处）、
+  `pb_omni_pid_pursuit_controller/src/omni_pid_pursuit_controller.cpp:505`
+- **验证方式**：`ros2 topic echo --once /local_costmap/costmap --field data` 后数不同取值个数
+  （改前 12，改后 79）；`ros2 topic hz /global_costmap/costmap` 不应变慢（基线 0.80 Hz）
+- **日期**：2026-10-24
+
+## 16. RViz 里代价地图的青色/品红是固定特殊色，不在渐变里
+
+- **现象**：按"蓝→紫→红"的直觉解读膨胀区颜色，得出"最靠近车的是红色、蓝色在中间"的结论，
+  与数值完全对不上。
+- **根因**：`librviz_default_plugins.so` 的 `makeCostmapPalette()` 把两个特殊值单独写死：
+  `99 = INSCRIBED_INFLATED_OBSTACLE` 是**纯青** (0,255,255)，
+  `100 = LETHAL_OBSTACLE` 是**纯品红** (255,0,255)；中间 1→98 才是蓝→紫→绿→红→黄的渐变，
+  255（未知）是灰绿。所以"青"= 内切圈边缘，"品红"= 致命障碍，其余都是代价梯度。
+- **修正**：判参数一律落到数值，不凭颜色。要确认调色板本身，写个小程序链接
+  `librviz_default_plugins` 调用 `makeMapPalette() / makeCostmapPalette() / makeRawPalette()`
+  做全量转储即可（本次用的临时程序未入库）。
+- **涉及文件**：`/opt/ros/humble/lib/librviz_default_plugins.so`
+- **验证方式**：`ros2 topic echo --once /local_costmap/costmap --field data` 的直方图，
+  与 RViz 上看到的色带逐段对照
+- **日期**：2026-10-24
+
+## 17. ROS 格式 `.pgm` 的第 0 行是图像顶部（y 最大）
+
+- **现象**：拿 `maps/*.pgm` 做离线分析，算出走廊在 y −7.6…−3.8、只有 50 列同时有上下墙；
+  而实际走廊在 y −1.2…+1.5，290 列都有墙。整张图被判成上下镜像。
+- **根因**：ROS 存图沿用图像行序，**第 0 行是 y 最大那一行**。按
+  `y = origin.y + row * resolution` 算，整张图上下翻转。
+- **修正**：正确换算是 `y = origin.y + (height - 1 - row) * resolution`。
+  写出前用已知点自检：`(0, 0)` 必须落在自由格上。
+- **涉及文件**：任何直接解析 `maps/*.pgm` 的离线脚本（本次是临时脚本，未入库）。
+  注意**消息和文件行序相反**：`OccupancyGrid` 的 `data` 从 row 0 = `origin.y` 开始，
+  和 `.pgm` 正好上下颠倒；`ros_ws/tools/gap_report.py` 读的是 bag 里的消息，
+  按 `y = oy + row*res` 是对的，不要据此"修正"它
+- **验证方式**：把 `/odometry` 的若干位姿投影到地图上，应全部落在 free 格；
+  行序反了会全落在 unknown 或障碍区
+- **日期**：2026-10-24

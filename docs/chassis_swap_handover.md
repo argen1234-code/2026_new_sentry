@@ -173,17 +173,17 @@ Nav2、Point-LIO、terrain、USB 桥都按这些名字引用（导出里的 `bas
 |---|---|---|
 | `local_costmap.robot_radius` | 0.26 | 新外接圆半径 |
 | `global_costmap.robot_radius` | 0.26 | 同上 |
-| `inflation_radius` | 0.35 | 半径 + 安全余量 |
-| `footprint_padding` | 0.03 | 同上 |
+| `inflation_radius` | 1.04 | 车体半径 + 3 倍半径的膨胀带（`0.26 + 3×0.26`）；`cost_scaling_factor` 3.0 |
+| `footprint_padding` | 0.09 | 与 `robot_radius` 一起决定近场剔除半径（0.26+0.09=0.35） |
 | `velocity_smoother.max_velocity` | `[0.45, 0.3, 1.0]` | 新底盘速度上限 |
 | `velocity_smoother.max_accel` | `[2.5, 2.5, 4.0]` | 新底盘斜坡 |
 | `controller_server.min_y_velocity_threshold` | 0.001 | 非麦轮可调大 |
 | `controller_server.v_linear/v_angular` | ±0.45 / ±1.0 | 新上限 |
 | `goal_checker.xy/yaw` | 0.2 m / 0.3 rad | 按车体尺寸 |
-| costmap `min/max_obstacle_height` | 0.0–1.0 m | 新车体高度 |
-| `terrainUnderVehicle` | -0.12 | 新雷达离地高度（点云实测，取负值） |
+| costmap `min/max_obstacle_height` | 0.15 / 0.50 | 新车体高度；与 `pointcloud_to_laserscan` 同值 |
+| `terrainUnderVehicle` | -0.12 | 地面相对 `vehicleZ`（点云实测，取负值）；**与 `lidar_z` 无关** |
 | `minRelZ/maxRelZ/lowerBoundZ/upperBoundZ` | -0.35/0.8, -0.6/0.8 | 重新标定 |
-| `pointcloud_to_laserscan.min_height/max_height` | 0.15 / 1.07 | 重新标定，且必须与 `lidar_z` 同步改 |
+| `pointcloud_to_laserscan.min_height/max_height` | 0.16 / 0.50 | 重新标定，且必须与 `lidar_z` 同步改 |
 | `fake_vel_transform.use_gimbal` | `False` | 正式云台车改 `True` |
 
 文件：`ros_ws/src/sentry_hardware/usb_bridge/usb_bridge/cmd_vel_to_unified.py`
@@ -271,7 +271,7 @@ MID360 安装位姿变化后，`terrainUnderVehicle`、`minRelZ/maxRelZ`、
    **静态障碍物验证（车静止、环境不变）**：
    - 连续采样 10 s，同一障碍的 occupied 格数波动应 < 5%
    - 障碍边缘不应随时间“长毛”或缩水；`unknown` 区域不应反复被填/清
-   - 地面不应出现在 local costmap（`min_obstacle_height=0.05` 起）
+   - 地面不应出现在 local costmap（`min_obstacle_height=0.15` 起）
    - 障碍物中心与激光测距的偏差 < 0.1 m
    - 检查 `/terrain_map`、`/terrain_map_ext` 的点数是否稳定
    - 如出现抖动，优先查 `observation_persistence`、`decayTime`、
