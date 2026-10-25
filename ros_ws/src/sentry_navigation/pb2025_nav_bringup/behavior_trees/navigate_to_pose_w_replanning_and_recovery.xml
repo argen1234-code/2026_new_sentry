@@ -5,10 +5,10 @@
     <RecoveryNode name="NavigateRecovery"
                   number_of_retries="20">
       <PipelineSequence name="NavigateWithReplanning">
-        <RateController hz="1">
+        <RateController hz="3">
           <!-- 先连续重试3次（不清地图），3次全败后才清局部+全局代价地图 -->
           <RecoveryNode name="ComputePathToPoseRecovery"
-                        number_of_retries="1">
+                        number_of_retries="3">
             <!-- 内层：先连续尝试3次不清地图 -->
             <RecoveryNode name="ComputePathToPose_Retry3"
                           number_of_retries="1">
