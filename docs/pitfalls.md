@@ -261,3 +261,24 @@
 - **验证方式**：把 `/odometry` 的若干位姿投影到地图上，应全部落在 free 格；
   行序反了会全落在 unknown 或障碍区
 - **日期**：2026-10-24
+
+## 18. 静止时 LETHAL 格逐帧换一批（看着像噪点，其实是身份抖动）
+
+- **现象**：车不动，代价地图致命格数稳定（869–901），但每帧落点都换；
+  全局相邻帧 LETHAL 的 IoU 只有 0.32、局部 0.42，路径带上的格尤其跳。
+- **根因**：`IntensityVoxelLayer::updateBounds` 每周期 `resetMaps()` 重画
+  （`pb_nav2_plugins/src/layers/intensity_voxel_layer.cpp:130`），而
+  `observation_persistence` 默认 0.0 ⇒ 每张图只投影最新一帧地形云；地形源
+  `decayTime: 0.2 s` 导致每帧覆盖不同（84% 的体素只在 ≤20% 帧出现）。
+  另有一个陷阱：仅调大 persistence 不够，**代价地图发布频率必须与持久化窗口对齐**，
+  否则相邻两张图来自互不重叠的观测窗（全局曾发 1 Hz、pers 0.5 s，等于没加）。
+- **修正**：`mark_threshold: 1`；局部 `terrain_map` persistence 1.0 s；
+  全局 `terrain_map_ext` persistence 1.5 s；全局 `publish_frequency` 1.0→2.0。
+  实测全局 IoU 0.32→0.72、局部 0.42→0.75，路径带 0.77/0.75。完整方法见
+  [lethal_flicker_fix.md](lethal_flicker_fix.md)。
+- **涉及文件**：`ros_ws/src/sentry_navigation/pb2025_nav_bringup/config/reality/nav2_params.yaml`；
+  代码侧只读参考 `pb_nav2_plugins/src/layers/intensity_voxel_layer.cpp:130`
+- **验证方式**：静止起栈（`enable_motion:=false`）录 25 s
+  `terrain_map|terrain_map_ext|costmap`，算相邻帧 LETHAL 的 `|A∩B|/|A∪B|`，
+  要求全局/局部都 ≥0.70；不要只看格数。动态障碍尾迹（≤persistence）需动车另验
+- **日期**：2026-10-25
