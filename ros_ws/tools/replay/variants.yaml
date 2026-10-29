@@ -1,0 +1,120 @@
+# Sweep definitions for the bag-replay harness.
+#
+# `changes` are dotted paths into nav2_params.yaml after <robot_namespace> is
+# replaced with "". Only the listed keys are overridden; everything else stays
+# identical to the real-robot config, so a variant differs from the baseline by
+# exactly what is written here.
+#
+# Params known to be dead and therefore never swept:
+#   FollowPath.lookahead_dist          -- ignored while use_velocity_scaled_lookahead_dist
+#   GridBased.w_heuristic_cost         -- not declared by Humble Theta*
+#   GridBased.how_many_corners         -- lib forces 8
+#   FollowPath.rotate_to_heading_*vel  -- not declared by this plugin version
+
+groups:
+  # ---- R2: fidelity baseline ----------------------------------------------
+  # F0 reproduces the pre-X2 config: 1 Hz replanning, 5/2 Hz costmaps,
+  # mark_threshold 0, 0.15-0.50 m obstacle heights, no observation_persistence.
+  #
+  # Which baseline is comparable depends on the scenario:
+  #   scenario A (dyn_base_open, 10-25)  -> predates 7189a7b, use F0
+  #   scenario B (dyn_1029_1712, 10-29)  -> recorded WITH X2 (/plan 2.55 Hz,
+  #                                         costmaps 1.7-1.8 Hz), use G0/C0
+  F0:
+    label: pre-X2 config (what was recorded)
+    changes:
+      local_costmap.local_costmap.ros__parameters.update_frequency: 5.0
+      local_costmap.local_costmap.ros__parameters.publish_frequency: 1.0
+      local_costmap.local_costmap.ros__parameters.intensity_voxel_layer.mark_threshold: 0
+      local_costmap.local_costmap.ros__parameters.intensity_voxel_layer.min_obstacle_height: 0.15
+      local_costmap.local_costmap.ros__parameters.intensity_voxel_layer.max_obstacle_height: 0.50
+      local_costmap.local_costmap.ros__parameters.intensity_voxel_layer.terrain_map.min_obstacle_height: 0.15
+      local_costmap.local_costmap.ros__parameters.intensity_voxel_layer.terrain_map.max_obstacle_height: 0.50
+      local_costmap.local_costmap.ros__parameters.intensity_voxel_layer.terrain_map.observation_persistence: 0.0
+      global_costmap.global_costmap.ros__parameters.update_frequency: 2.0
+      global_costmap.global_costmap.ros__parameters.publish_frequency: 1.0
+      global_costmap.global_costmap.ros__parameters.intensity_voxel_layer.mark_threshold: 0
+      global_costmap.global_costmap.ros__parameters.intensity_voxel_layer.min_obstacle_height: 0.15
+      global_costmap.global_costmap.ros__parameters.intensity_voxel_layer.max_obstacle_height: 0.50
+      global_costmap.global_costmap.ros__parameters.intensity_voxel_layer.terrain_map_ext.min_obstacle_height: 0.15
+      global_costmap.global_costmap.ros__parameters.intensity_voxel_layer.terrain_map_ext.max_obstacle_height: 0.50
+      global_costmap.global_costmap.ros__parameters.intensity_voxel_layer.terrain_map_ext.observation_persistence: 0.0
+      bt_navigator.ros__parameters.default_nav_to_pose_bt_xml: "{HERE}/bt/pre_x2_navigate_to_pose.xml"
+
+  # ---- R3: global planner -------------------------------------------------
+  G0:
+    label: baseline Theta*
+    changes: {}
+  G1:
+    label: Theta* traversal cost 5 (prefers centre line)
+    changes:
+      planner_server.ros__parameters.GridBased.w_traversal_cost: 5.0
+  G2:
+    label: Theta* traversal cost 20 (prefers shortest)
+    changes:
+      planner_server.ros__parameters.GridBased.w_traversal_cost: 20.0
+  G3:
+    label: no final approach orientation
+    changes:
+      planner_server.ros__parameters.GridBased.use_final_approach_orientation: false
+  G4:
+    label: unknown space is fatal to the planner
+    changes:
+      planner_server.ros__parameters.GridBased.allow_unknown: false
+  G5:
+    label: SmacPlanner2D
+    changes:
+      planner_server.ros__parameters.GridBased.plugin: nav2_smac_planner/SmacPlanner2D
+      planner_server.ros__parameters.GridBased.tolerance: 0.5
+      planner_server.ros__parameters.GridBased.downsample_costmap: false
+      planner_server.ros__parameters.GridBased.max_iterations: 1000000
+  G6:
+    label: NavFn A*
+    changes:
+      planner_server.ros__parameters.GridBased.plugin: nav2_navfn_planner/NavfnPlanner
+      planner_server.ros__parameters.GridBased.tolerance: 0.5
+      planner_server.ros__parameters.GridBased.use_astar: true
+
+  # ---- R4: local controller ----------------------------------------------
+  C0:
+    label: baseline controller
+    changes: {}
+  C1:
+    label: lookahead_time 0.8 (short lookahead, 0.36 m at full speed)
+    changes:
+      controller_server.ros__parameters.FollowPath.lookahead_time: 0.8
+  C2:
+    label: lookahead_time 2.2 (long lookahead, 0.99 m at full speed)
+    changes:
+      controller_server.ros__parameters.FollowPath.lookahead_time: 2.2
+  C3:
+    label: no rotate-to-heading (never stop to turn)
+    changes:
+      controller_server.ros__parameters.FollowPath.use_rotate_to_heading: false
+  C4:
+    label: rotate-to-heading threshold 0.4
+    changes:
+      controller_server.ros__parameters.FollowPath.use_rotate_to_heading_treshold: 0.4
+  C5:
+    label: softer translation gain (kp 2.0, kd 0.8)
+    changes:
+      controller_server.ros__parameters.FollowPath.translation_kp: 2.0
+      controller_server.ros__parameters.FollowPath.translation_kd: 0.8
+  C6:
+    label: faster rotation gain (kp 1.6)
+    changes:
+      controller_server.ros__parameters.FollowPath.rotation_kp: 1.6
+  C7:
+    label: max linear 0.35 m/s
+    changes:
+      controller_server.ros__parameters.FollowPath.v_linear_max: 0.35
+      velocity_smoother.ros__parameters.max_velocity: [0.35, 0.3, 1.0]
+  C8:
+    label: gentler acceleration limits
+    changes:
+      velocity_smoother.ros__parameters.max_accel: [1.5, 1.5, 2.5]
+      velocity_smoother.ros__parameters.max_decel: [-1.5, -1.5, -2.5]
+  C9:
+    label: earlier approach deceleration (0.9 m)
+    changes:
+      controller_server.ros__parameters.FollowPath.approach_velocity_scaling_dist: 0.9

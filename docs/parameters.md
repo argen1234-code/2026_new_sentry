@@ -12,8 +12,8 @@
 
 | 参数 | 当前值 | 说明 |
 |---|---|---|
-| `max_vx` / `max_vy` / `max_wz` | `0.45` / `0.30` / `1.0` | 与底盘有效速度一致；超限直接钳位 |
-| `frame_yaw` | `-0.7853981634`（−45°） | 轮系相对 `base_footprint` 的平移偏角；**换底盘或改雷达安装后必须重测** |
+| `max_vx` / `max_vy` / `max_wz` | `0.9` / `0.6` / `1.3` | 与底盘有效速度一致；超限直接钳位。**三处必须同值**：本表、`velocity_smoother`、`usb_bridge.launch.py` |
+| `frame_yaw` | `-2.356194490192345`（−135°） | 轮系相对 `base_footprint` 的平移偏角；**换底盘或改轮系安装后必须重测**。历史文档里的 −45° 已作废，见 [`pitfalls.md`](pitfalls.md) #1 |
 | `sign_wz` | `1.0` | 自转符号；固件已单独处理 wz 取负，这里不要再翻 |
 | `publish_rate` | `50.0` Hz | 稳态重发，避免上游 `/cmd_vel` 抖动导致底盘断续 |
 | `command_timeout` | `0.5` s | 超过即发零速 |
@@ -115,10 +115,14 @@ RViz 里该显示项为空是正常现象，不影响 GICP 与 Nav2。
 | `GridBased.plugin` | `nav2_theta_star_planner/ThetaStarPlanner` | 必须与插件 XML 的 `name` 完全一致 |
 | `allow_unknown` | `true` | 允许在未知区规划 |
 | `w_traversal_cost` | `10.0` | 越大越远离内切区 |
-| `FollowPath` 速度上限 | `0.45` m/s / `1.0` rad/s | 与底盘一致 |
+| `FollowPath` 速度上限 | `0.9` m/s / `1.3` rad/s | 与底盘一致（`v_linear_±0.9`、`v_angular_±1.3`） |
 | `lookahead_dist` | `1.2` m（0.5–2.5） | 前瞻 |
-| `xy_goal_tolerance` / `yaw_goal_tolerance` | `0.2` m / `0.3` rad | 车体 0.45 m，再大就会提前判定到达 |
-| `velocity_smoother.max_velocity` | `[0.45, 0.3, 1.0]` | 与 `/cmd_vel` 限制一致，`scale_velocities: true` |
+| `xy_goal_tolerance` / `yaw_goal_tolerance` | `0.2` m / `0.3` rad | 圆形车体半径 0.26 m，再大就会提前判定到达 |
+| `curvature_min` / `curvature_max` | `0.4` / `0.7` | 低于 min 不减速，高于 max 按 reduction_ratio 降速 |
+| `curvature_forward_dist` / `_backward_dist` | `1.2` / `0.6` m | 曲率估计窗口。0.7/0.3 会被规划抖动打穿、速度来回砸；加宽后降速连续（见 pitfalls #19） |
+| `reduction_ratio_at_high_curvature` | `0.5` | 高曲率降到半速。试过 0.75（更快但抖动回到原水平），已回退 |
+| `max_velocity_scaling_factor_rate` | `0.9` | 曲率降速的**恢复**速率上限；下行不受限（源码 `min(raw_pid, scaled)`），参数改不动 |
+| `velocity_smoother.max_velocity` | `[0.9, 0.6, 1.3]` | 与 `/cmd_vel` 限制一致，`scale_velocities: true` |
 
 ### 4.3 膨胀层为什么是 1.04 / 3.0
 
@@ -187,11 +191,11 @@ RViz 里该显示项为空是正常现象，不影响 GICP 与 Nav2。
 | 地面在 `base_footprint` 的高度 | 隐含 0 | **+0.078 m** | `lidar_z` 抬高后点云整体上移，`base_footprint` 与真实地面的差变了 | 同上 §4.1 |
 | `pointcloud_to_laserscan` 高度带 | `0.08 / 1.0` | **`0.16 / 0.50`** | 上一行推出下沿；上沿按 Humble 收紧到 0.50，与代价地图同值 | §2 |
 | 自遮挡 / 盲区 `blind` | `0.5`（未验证） | **`0.5` 有效** | 自返回环半径小于 0.5 m，`blind` 能挡住 | [`chassis_calibration.md`](chassis_calibration.md) §2 |
-| 轮系平移偏角 `frame_yaw` | 无 | **−45°** | 麦轮轮系相对车体转 45°；`wz` 的符号由固件单独取负 | §1.1、[`chassis_speed_reference.md`](chassis_speed_reference.md) |
+| 轮系平移偏角 `frame_yaw` | 无 | **−135°** | 轮系相对车体 `base_footprint` 的安装偏角；`wz` 的符号由固件单独取负。早期文档写 −45°，实车跑通值为 −135°（见 pitfalls #1） | §1.1、[`chassis_speed_reference.md`](chassis_speed_reference.md) |
 | 地面相对 `vehicleZ` | — | **`-0.12`** | 与 `lidar_z` 无关，两者同步平移 | §2 |
 | `localTerrainMapRadius` | `4.0` | **`6.0`** | 4 m 处有一圈幻影障碍；地面误报 0.43% → 0.09% | §2 |
 | 膨胀带 | `0.35 / 5.0` | **`1.04 / 3.0`** | 见 §4.3 | §4.3 |
-| 底盘有效速度 | — | **`0.45 / 0.30 / 1.0`** | 实测各方向上限；`/cmd_vel` 钳位、`velocity_smoother` 与固件三处同值 | §1.1 |
+| 底盘有效速度 | — | **`0.9 / 0.6 / 1.3`** | 2026-10-29 提到 0.9 实车跑通（去程 14.5 m 用 33 s）；`/cmd_vel` 钳位、`velocity_smoother`、`pb2025_nav_bringup` 与 `usb_bridge.launch.py` **四处必须同值**，否则被最紧的一处静默截断 | §1.1、§4.2 |
 
 ### 还没验证完的
 

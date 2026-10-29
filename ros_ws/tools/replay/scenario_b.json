@@ -1,0 +1,53 @@
+{
+  "_comment": "Recorded baseline (scenario B) from ~/bags/dyn_1029_1712 (2026-10-29), recorded WITH the X2 config in 7189a7b -- so the comparable replay baseline is G0/C0, not F0. Reference numbers come from metrics.py on the bag itself. Map is corridor_1029_run1 (recorded costmap lethal cells hit it 83.2%, corridor_1025_tape only 6.4%).",
+  "bag": "/home/gzu-prink/bags/dyn_1029_1712",
+  "map": "corridor_1029_run1.yaml",
+  "goals": [
+    {
+      "t": 0.0,
+      "x": 13.78,
+      "y": -1.08,
+      "yaw": 0.0
+    },
+    {
+      "t": 77.2,
+      "x": 0.03,
+      "y": 0.07,
+      "yaw": 3.14159
+    }
+  ],
+  "reference_metrics": {
+    "duration_s": 166.5,
+    "path_length_m": 34.47,
+    "n_odom": 3331,
+    "n_plans": 425,
+    "replan_hz": 2.55,
+    "final_pose": [
+      0.15,
+      0.12,
+      -2.82
+    ],
+    "max_x": 13.52,
+    "longest_stop_s": 0.2,
+    "stops_ge_05s": 0,
+    "cmd_accel_p95_ms2": 1.73,
+    "speed_moving_mean_ms": 0.20974762912939465,
+    "speed_moving_median_ms": 0.19083992301562136,
+    "frac_speed_lt_005": 0.06544581206844792,
+    "jitter_p50_m": 0.02612328352464886,
+    "jitter_p90_m": 0.12516200833436472,
+    "jitter_max_m": 0.5577938927017553,
+    "pairs_over_015_frac": 0.14444444444444443,
+    "n_plan_pairs": 360,
+    "min_clearance_m": 0.14,
+    "median_clearance_m": 0.33,
+    "goal_reaction": {
+      "goal_switch_t": 1793265241.6305525,
+      "reaction_s": 18.75,
+      "new_goal": [
+        0.03,
+        0.07
+      ]
+    }
+  }
+}

@@ -19,6 +19,12 @@
     **两棵树（`chassis_fw`、`sentinel`）都要改。**
   - ROS 侧 `cmd_vel_to_unified` 的 `frame_yaw` 改为 `-0.7853981634`（每 tick 重读，
     `ros2 param set` 即时生效，无需重启）。
+    **已修订（2026-10-29）**：上面这条数值已过时。代码与运行中参数现为
+    `-2.356194490192345`（−135°），启动日志打印 `frame_yaw=-2.3562`；以代码为准，
+    依据是当日实车跑通（先验图 + GICP，map 系横向误差 p50 2.1 cm / p90 5.8 cm，全程 74 s
+    无碰撞无恢复）。若换成 −45° 会整体偏 90°，车会横着走。
+    注意该偏角是**轮系相对 `base_footprint` 的安装偏角**，与云台无关；当前阶段车上没有
+    云台（`use_gimbal: false`），只有底盘，换底盘或改轮系安装后仍需重测。
   - 「顺时针 90°」（205/207 吃 `-vx`、206/208 吃 `+vy`）是 45° 修正的一部分历史，**别回退**。
 - **涉及文件**：`stm32_ws/`（`chassis_fw` / `sentinel` 的底盘标定与 `Omni_chassis.c`）、
   `ros_ws/src/sentry_hardware/usb_bridge/usb_bridge/cmd_vel_to_unified.py`
@@ -282,3 +288,104 @@
   `terrain_map|terrain_map_ext|costmap`，算相邻帧 LETHAL 的 `|A∩B|/|A∪B|`，
   要求全局/局部都 ≥0.70；不要只看格数。动态障碍尾迹（≤persistence）需动车另验
 - **日期**：2026-10-25
+
+## 19. 巡航中段的「曲率降速带」是地图里的实体隔断，不是控制器抖动
+
+- **现象**：0.9 m/s 配置下，去程约 5–16 s、回程约 58–70 s 各有一段 11–13 s 的降速，
+  指令从 0.9 掉到 0.40–0.51 并稳定在那里，看着像曲率估计在抖。**去程回程落在同一段走廊**
+  （x ≈ 2.6–5.8），不是随机出现。
+- **根因**：`maps/corridor_1029_run1.pgm` 在 **x ≈ 3.7、y = +0.2…−0.4** 有一道
+  0.10 m 厚（2 格）、0.6 m 长的实体隔断，把走廊分成北 0.9 m（y +0.3…+1.2）和
+  南 0.4 m（y −0.9…−0.5）两条通道。全局路径必须绕墙做 S 弯，用 `curvature_forward_dist
+  1.2 / backward_dist 0.6` 量出的曲率达到 **0.86–1.00**（0.4 m 窗口更到 1.4–1.9），
+  超过 `curvature_max 0.7`，按 `reduction_ratio_at_high_curvature 0.5` 降到 0.45。
+  **这是设计行为，不是缺陷**——以 0.9 m/s 直冲 0.9 m 宽通道才是错的。
+- **修正 / 结论**：不要把降速段当抖动去动 `curvature_min` / `curvature_max`。
+  调参只能改「过渡方式」，改不了「要不要降速」：
+  - `curvature_forward_dist 0.7 → 1.2`、`curvature_backward_dist 0.3 → 0.6`：
+    估计变连续，0.9↔0.11 的锯齿消失，改为平滑降到 ~0.42。满速↔半速翻转 26→19 次，
+    `|Δv|`/0.2 s 的 p90 0.29→0.23、p99 0.50→0.40，去程 45→35 s。**定稿采用。**
+  - `reduction_ratio_at_high_curvature 0.5 → 0.75`：那段提到 ~0.67，全程 74.4→72.8 s，
+    但抖动指标回到 p90 0.28 / p99 0.50（接近未改前的水平），故**回退为 0.5**。
+- **排查时排除过的两个假设**（都不成立，别再走）：
+  速度尖峰与 `/cmd_vel` 角速度相关性仅 0.107；与重规划时刻无关联（落差前 0.15 s 内有
+  重规划的比例 38%，随机基线 40%）。
+- **涉及文件**：`pb2025_nav_bringup/config/reality/nav2_params.yaml`（`FollowPath` 曲率四项）、
+  `maps/corridor_1029_run1.pgm`；只读参考
+  `pb_omni_pid_pursuit_controller/src/omni_pid_pursuit_controller.cpp:566-593`
+- **验证方式**：逐秒打印 `/cmd_vel` 的 `|v|` 与 **map 系**（不是 odom 系，见 #21）路径曲率。
+  **降速段里曲率接近 0，才是真的抖动**；曲率高则是真实弯道。
+- **日期**：2026-10-29
+
+## 20. 用「最近邻采样」跨真实数据缺口做分析，会凭空造出不存在的行为
+
+- **现象**：曾据同一个 bag 判定出两条「铁证」——「末端偏航锁死 5.5 s，指令恒为
+  `vx=vy=0, w=0.20`」「起步 8 s 只有 0.05 m/s」。据此把 `yaw_goal_tolerance` 改成 6.28，
+  结论全错，已回退。
+- **根因**：
+  1. `/cmd_vel` 在没有导航目标时**根本不发布**。整段 100 s 的 bag 里它只有一个
+     **10.5 s 的缺口**，且比 `/odometry` 晚 7.7 s 才开始。
+  2. 用 `bisect` 找最近邻时，缺口两侧的样本会被拉到缺口内部的任意时刻，于是缺口被
+     「填满」成一条看似连续的低速/零速序列——凭空生成的行为。
+  3. 每个 topic 的首样本时间不同，用全局 `t0` 做时间轴会整体错位。
+- **修正**：每个 topic **单独**取 `t0`；下任何时序结论前先打印该 topic 的采样间隔分位数
+  和最大缺口；间隔 > 1 s 的区间标记为「无数据」，既不插值也不参与判读。
+  `ros_ws/tools/replay/an_run.py` 已按 topic 单独排序，缺口处直接判为无数据。
+- **涉及文件**：`ros_ws/tools/replay/an_run.py`（`load()` / `nearest()`）
+- **验证方式**：`dead_cmd_s` 这类指标算完之后，用 `ros2 topic hz` 的原始分布复核一遍；
+  若某段「异常」正好横跨一个缺口，先怀疑分析而不是控制器。
+- **日期**：2026-10-29
+
+## 21. 在 odom 系里比横向误差，会被 LIO 漂移放大成米级
+
+- **现象**：拿 `/odometry` 的位姿直接与 `/plan` 求最近距离，得到 **0.4–1.1 m** 的横向误差，
+  看上去跟踪完全失效。
+- **根因**：`/plan` 在 **map 系**，`/odometry` 在 **odom 系**，两者之间隔着 LIO 位姿，
+  一趟 74 s 会漂 0.4–1.1 m。误差量里绝大部分是漂移，不是跟踪误差。
+- **修正**：用 `/tf` 的 `map → odom` 把 odom 位姿先投回 map 系再求距离。同一段数据的
+  真实横向误差是 **p50 0.021 m / p90 0.058 m**。
+- **涉及文件**：`ros_ws/tools/replay/an_run.py`（`to_map()`）
+- **验证方式**：同一段 bag 分别按两种坐标系算，差值应等于 LIO 漂移量级；若两者接近，
+  说明这段根本没漂，可用 odom 系省事。
+- **日期**：2026-10-29
+
+## 22. `map_server` 起栈后停在 `unconfigured`，日志里只有「Configuring map_server」
+
+- **现象**：`lifecycle_manager` 打印 `Configuring map_server` 之后**再无输出**，
+  `map_server` 自己连一行 `Configuring` 都没打印，`/map` 没有发布者，Nav2 整体起不来。
+  同一份配置在另一次启动里 1.6 ms 就配置完成——是**间歇性**的。
+- **根因**：未查明（现象可复现但非必现；怀疑是启动期资源竞争让 configure 回调没被调起）。
+  已知和地图文件本身无关——同一张图重启后正常。
+- **修正**：不用重启整栈，手动推生命周期即可：
+  ```bash
+  ros2 lifecycle set /map_server configure
+  ros2 lifecycle set /map_server activate
+  ```
+  仍失败就重起整栈（实测每次重起都能好）。
+- **涉及文件**：无代码改动
+- **验证方式**：**发目标前必须两项都满足**——
+  `ros2 lifecycle get /map_server` 应为 `active [3]`，`ros2 topic info /map` 发布者数应为 1。
+- **日期**：2026-10-29
+
+## 23. A→B 掉头时平移停住约 4 s（`use_rotate_to_heading`）
+
+- **现象**：每趟任务在 A→B 掉头处，平移停止约 4 s（实测 R0 4.3 s、R1' 3.9 s、R2 4.0 s），
+  期间 `vx=vy=0`、`wz` 从 1.1 降到 0.6，之后才重新起步。这是全程**唯一**的平移停顿
+  （`/cmd_vel` 全程 100 Hz 无断流，实际速度无 <0.05 m/s 的短暂停顿）。
+- **根因**：`use_rotate_to_heading: true` + 阈值 0.7 rad。偏差超过 40° 时控制器把
+  `lin_dist` 置 0，**先原地转完再走**（`omni_pid_pursuit_controller.cpp:264-268`）。
+  掉头时偏差接近 180°，所以必然触发。
+- **未改的原因（2026-10-29 决定保持现状）**：本车是**圆形车体**（`body_radius 0.26`，
+  costmap 用 `robot_radius: 0.26`）且 MID360 为 360°，车头朝向既不影响通行也不影响感知，
+  理论上可以照母工程用 `enable_rotation: false` 彻底不转。但那需要**连带**把
+  `yaw_goal_tolerance` 放到 6.28（母工程即如此），否则 `SimpleGoalChecker` 要求终点朝向
+  ±17°、车又转不了，目标会判失败。本次不改，留作后续选项。
+- **另一个必须知道的区别**：母工程「纯平移」的前提是**雷达装在云台 yaw 轴上**，
+  `fake_vel_transform` 用 `gimbal_yaw → gimbal_yaw_fake` 把导航坐标系与车体转动解耦。
+  **本车没有云台**（`use_gimbal: false`，`gimbal_yaw` 是 `base_link` 的固定子帧，
+  `front_mid360` 挂在它下面随车体转），所以那套机制在这里不存在，不能直接照搬。
+- **涉及文件**：`pb2025_nav_bringup/config/reality/nav2_params.yaml`（`enable_rotation`、
+  `use_rotate_to_heading`、`general_goal_checker.yaw_goal_tolerance`）
+- **验证方式**：`/cmd_vel` 里筛 `|v| < 0.05 且 |wz| > 0.3` 的连续段，就是原地转向段；
+  当前应只有 1 段、约 4 s。
+- **日期**：2026-10-29

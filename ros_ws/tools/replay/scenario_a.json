@@ -1,0 +1,74 @@
+{
+  "_comment": "Recorded baseline (scenario A) from ~/bags/dyn_base_open, measured in R0. Every replay variant is scored against these values.",
+  "bag": "/home/gzu-prink/bags/dyn_base_open",
+  "map": "corridor_1025_tape.yaml",
+  "duration_s": 151.25,
+  "path_length_m": 26.04,
+  "n_odom": 3026,
+  "n_plans": 137,
+  "replan_hz": 0.91,
+  "goals": [
+    {
+      "t": 0.0,
+      "x": 11.97,
+      "y": -0.97,
+      "yaw": 0.0
+    },
+    {
+      "t": 74.2,
+      "x": 0.18,
+      "y": -0.13,
+      "yaw": 0.0
+    }
+  ],
+  "max_x": {
+    "t_s": 83.8,
+    "x": 8.34,
+    "y": -0.79
+  },
+  "turnaround_t_s": 83.8,
+  "final_pose": {
+    "x": 0.28,
+    "y": -0.02,
+    "yaw": -2.43
+  },
+  "speed_moving_mean_ms": 0.175,
+  "speed_moving_median_ms": 0.156,
+  "frac_time_speed_lt_005": 0.09,
+  "outbound_speed_mean_ms": 0.165,
+  "return_speed_mean_ms": 0.187,
+  "reference_metrics": {
+    "duration_s": 151.25,
+    "path_length_m": 26.04,
+    "n_odom": 3026,
+    "n_plans": 137,
+    "replan_hz": 0.91,
+    "final_pose": [
+      0.28,
+      -0.02,
+      -2.43
+    ],
+    "max_x": 8.36,
+    "longest_stop_s": 0.2,
+    "stops_ge_05s": 0,
+    "cmd_accel_p95_ms2": 0.78,
+    "speed_moving_mean_ms": 0.1745972045238791,
+    "speed_moving_median_ms": 0.1560687003460965,
+    "frac_speed_lt_005": 0.09120951751487112,
+    "jitter_p50_m": 0.05250212209415702,
+    "jitter_p90_m": 0.44387505301129776,
+    "jitter_max_m": 1.423973850927954,
+    "pairs_over_015_frac": 0.39622641509433965,
+    "n_plan_pairs": 106,
+    "min_clearance_m": 0.0,
+    "median_clearance_m": 0.58,
+    "goal_reaction": {
+      "goal_switch_t": 1792936453.8710957,
+      "reaction_s": 6.14,
+      "new_goal": [
+        0.18,
+        -0.13
+      ]
+    }
+  }
+}

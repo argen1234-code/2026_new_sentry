@@ -1,0 +1,9 @@
+{
+  "v_gain": 1.0,
+  "wz_gain": 1.0,
+  "deadband_v": 0.0,
+  "deadband_w": 0.0,
+  "frame_yaw_deg": -45.0,
+  "lag_tau": 0.0,
+  "latency": 0.0
+}

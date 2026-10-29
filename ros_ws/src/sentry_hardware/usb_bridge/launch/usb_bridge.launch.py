@@ -31,6 +31,9 @@ def generate_launch_description():
                 'enable_motion': ParameterValue(
                     LaunchConfiguration('enable_motion'), value_type=bool),
                 'cmd_vel_topic': LaunchConfiguration('cmd_vel_topic'),
+                'max_vx': 0.9,
+                'max_vy': 0.6,
+                'max_wz': 1.3,
             }],
         ),
     ])

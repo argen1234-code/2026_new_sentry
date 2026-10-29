@@ -38,6 +38,8 @@ def generate_launch_description():
     container_name_full = (namespace, "/", container_name)
     use_respawn = LaunchConfiguration("use_respawn")
     log_level = LaunchConfiguration("log_level")
+    start_terrain = LaunchConfiguration("start_terrain")
+    start_tf_helpers = LaunchConfiguration("start_tf_helpers")
 
     lifecycle_nodes = [
         "controller_server",
@@ -114,6 +116,24 @@ def generate_launch_description():
         "log_level", default_value="info", description="log level"
     )
 
+    declare_start_terrain_cmd = DeclareLaunchArgument(
+        "start_terrain",
+        default_value="true",
+        description=(
+            "Start terrain_analysis / terrain_analysis_ext. Set false for bag "
+            "replay, where the terrain clouds come from a recording."
+        ),
+    )
+
+    declare_start_tf_helpers_cmd = DeclareLaunchArgument(
+        "start_tf_helpers",
+        default_value="true",
+        description=(
+            "Start loam_interface / sensor_scan_generation. Set false for bag "
+            "replay, where the replay harness owns odom->base_footprint."
+        ),
+    )
+
     start_terrain_analysis_cmd = Node(
         package="terrain_analysis",
         executable="terrainAnalysis",
@@ -123,6 +143,7 @@ def generate_launch_description():
         respawn_delay=2.0,
         arguments=["--ros-args", "--log-level", log_level],
         parameters=[configured_params],
+        condition=IfCondition(start_terrain),
     )
 
     start_terrain_analysis_ext_cmd = Node(
@@ -134,6 +155,7 @@ def generate_launch_description():
         respawn_delay=2.0,
         arguments=["--ros-args", "--log-level", log_level],
         parameters=[configured_params],
+        condition=IfCondition(start_terrain),
     )
 
     load_nodes = GroupAction(
@@ -148,6 +170,7 @@ def generate_launch_description():
                 respawn_delay=2.0,
                 parameters=[configured_params],
                 arguments=["--ros-args", "--log-level", log_level],
+                condition=IfCondition(start_tf_helpers),
             ),
             Node(
                 package="sensor_scan_generation",
@@ -158,6 +181,7 @@ def generate_launch_description():
                 respawn_delay=2.0,
                 parameters=[configured_params],
                 arguments=["--ros-args", "--log-level", log_level],
+                condition=IfCondition(start_tf_helpers),
             ),
             Node(
                 package="fake_vel_transform",
@@ -271,12 +295,14 @@ def generate_launch_description():
                 plugin="loam_interface::LoamInterfaceNode",
                 name="loam_interface",
                 parameters=[configured_params],
+                condition=IfCondition(start_tf_helpers),
             ),
             ComposableNode(
                 package="sensor_scan_generation",
                 plugin="sensor_scan_generation::SensorScanGenerationNode",
                 name="sensor_scan_generation",
                 parameters=[configured_params],
+                condition=IfCondition(start_tf_helpers),
             ),
             ComposableNode(
                 package="fake_vel_transform",
@@ -365,6 +391,8 @@ def generate_launch_description():
     ld.add_action(declare_container_name_cmd)
     ld.add_action(declare_use_respawn_cmd)
     ld.add_action(declare_log_level_cmd)
+    ld.add_action(declare_start_terrain_cmd)
+    ld.add_action(declare_start_tf_helpers_cmd)
     # Add the actions to launch all of the navigation nodes
     ld.add_action(start_terrain_analysis_cmd)
     ld.add_action(start_terrain_analysis_ext_cmd)

@@ -124,5 +124,7 @@ ros2 topic echo /diagnostics
 - `enable_motion` 默认 false；MCU 还要求 `chassis_status` 同时带 VALID 和
   MOTION_ENABLE，并检查 100 ms 命令新鲜度。
 - 命令超时、链路断开、模式非法时，MCU 锁定 `usb_armed` 并 force_stop。
-- `/cmd_vel` 已钳位到 0.45 m/s / 0.3 m/s / 1.0 rad/s，参数可调。
+- `/cmd_vel` 已钳位到 0.9 m/s / 0.6 m/s / 1.3 rad/s，参数可调。
+  这三值必须与 `pb2025_nav_bringup` 的 `v_linear_*` / `v_angular_*` 和
+  `velocity_smoother` 的 `max_velocity` 同值，否则会被最紧的一处静默截断。
 - 本节点仍可在 `enable_motion:=false` 下作为纯状态桥使用。
