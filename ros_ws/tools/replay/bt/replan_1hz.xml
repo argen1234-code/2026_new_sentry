@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Identical to navigate_to_pose_w_replanning_and_recovery.xml except the
+     ComputePathToPose RateController runs at 1 Hz instead of 3 Hz.
+
+     Reason to test it: /plan is measured at 2.59 Hz on the real bag, i.e. a new
+     path lands every ~0.39 s and the controller never settles on one line. The
+     question this variant answers is whether the path churn itself (not the
+     global costmap, not the controller rate) is what keeps the curvature gate
+     firing. Everything else is untouched, so any difference is this one number. -->
+<root BTCPP_format="3"
+      main_tree_to_execute="MainTree">
+  <BehaviorTree ID="MainTree">
+    <RecoveryNode name="NavigateRecovery"
+                  number_of_retries="10">
+      <PipelineSequence name="NavigateWithReplanning">
+        <RateController hz="1.0">
+          <RecoveryNode name="ComputePathToPose"
+                        number_of_retries="1">
+            <ComputePathToPose goal="{goal}"
+                               path="{path}"
+                               planner_id="GridBased"/>
+            <ClearEntireCostmap name="ClearGlobalCostmap-Context"
+                                service_name="global_costmap/clear_entirely_global_costmap"/>
+          </RecoveryNode>
+        </RateController>
+        <RecoveryNode name="FollowPath"
+                      number_of_retries="10">
+          <FollowPath path="{path}"
+                      controller_id="FollowPath"/>
+          <ClearEntireCostmap name="ClearLocalCostmap-Context"
+                              service_name="local_costmap/clear_entirely_local_costmap"/>
+        </RecoveryNode>
+      </PipelineSequence>
+      <ReactiveFallback name="RecoveryFallback">
+        <GoalUpdated/>
+        <RoundRobin name="RecoveryActions">
+          <Sequence name="ClearingActions">
+            <ClearEntireCostmap name="ClearLocalCostmap-Subtree"
+                                service_name="local_costmap/clear_entirely_local_costmap"/>
+            <ClearEntireCostmap name="ClearGlobalCostmap-Subtree"
+                                service_name="global_costmap/clear_entirely_global_costmap"/>
+            <Wait wait_duration="1.0"/>
+          </Sequence>
+          <Spin spin_dist="1.57"/>
+          <BackUp backup_dist="1.0" backup_speed="1.0"/>
+        </RoundRobin>
+      </ReactiveFallback>
+    </RecoveryNode>
+  </BehaviorTree>
+</root>

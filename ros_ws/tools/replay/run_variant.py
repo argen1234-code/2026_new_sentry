@@ -35,6 +35,9 @@ LIFECYCLE_NODES = [
 RECORD_TOPICS = [
     "/plan", "/cmd_vel", "/cmd_vel_controller", "/cmd_vel_nav2_result",
     "/odometry", "/local_costmap/costmap", "/global_costmap/costmap", "/tf",
+    # /tf_static carries the bench's map->odom; without it a replay bag cannot
+    # be checked for "robot inside a lethal cell" (tools/nav_tune/doctor.py).
+    "/tf_static",
 ]
 
 
@@ -237,7 +240,9 @@ def run_one(name, variant, args, out_root):
     with open(tag("meta.json"), "w") as f:
         json.dump({"variant": name, "label": variant.get("label"),
                    "changes": variant.get("changes", {}), "plant": args.plant,
-                   "crop": args.crop, "bag": args.bag, "bag_start": bag_start}, f, indent=2)
+                   "crop": args.crop, "bag": args.bag, "bag_start": bag_start,
+                   "map_odom": {k: getattr(args, f"map_odom_{k}")
+                                for k in ("x", "y", "z", "yaw")}}, f, indent=2)
 
     log(f"=== {run_id}: {variant.get('label','')}")
     launch_args = [
@@ -248,8 +253,10 @@ def run_one(name, variant, args, out_root):
         f"map:={args.map}",
         f"rviz:={'true' if (args.rviz or args.manual) else 'false'}",
     ]
-    if args.map_odom_z is not None:
-        launch_args.append(f"map_odom_z:={args.map_odom_z}")
+    for key in ("x", "y", "z", "yaw"):
+        val = getattr(args, f"map_odom_{key}", None)
+        if val is not None:
+            launch_args.append(f"map_odom_{key}:={val}")
     launch = spawn(launch_args, tag("launch.log"))
 
     preroll = spawn([
@@ -349,7 +356,13 @@ def main():
     ap.add_argument("--lifecycle-timeout", type=float, default=90.0)
     ap.add_argument("--tag", default="")
     ap.add_argument("--map-odom-z", type=float, default=None,
-                    help="override map_odom_z (live runs measure ~0.189)")
+                    help="override map_odom_z (the value decides whether the floor "
+                         "sits above or below the voxel layer's min_obstacle_height)")
+    ap.add_argument("--map-odom-x", type=float, default=None,
+                    help="override map_odom_x; recorded runs keep a constant offset, "
+                         "copy it from the bag's map->odom")
+    ap.add_argument("--map-odom-y", type=float, default=None)
+    ap.add_argument("--map-odom-yaw", type=float, default=None)
     ap.add_argument("--force", action="store_true")
     ap.add_argument("--manual", action="store_true",
                     help="skip goal_schedule; drive goals from RViz and Ctrl-C to finish")

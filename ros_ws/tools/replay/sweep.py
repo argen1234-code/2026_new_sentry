@@ -52,6 +52,12 @@ def main():
     ap.add_argument("--force", action="store_true")
     ap.add_argument("--stop-on-fail", action="store_true",
                     help="abort the sweep if a variant fails to score")
+    for key, help_ in (("x", "map->odom x offset, copy from the bag's /tf"),
+                       ("y", "map->odom y offset"),
+                       ("z", "map->odom z; decides whether the floor clears the "
+                             "voxel layer's min_obstacle_height"),
+                       ("yaw", "map->odom yaw")):
+        ap.add_argument(f"--map-odom-{key}", type=float, default=None, help=help_)
     args = ap.parse_args()
 
     scenario_path = args.scenario if os.path.isabs(args.scenario) \

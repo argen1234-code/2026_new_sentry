@@ -8,8 +8,13 @@ world -- and those seconds would be silently dropped.
 
 This node advances /clock (fast, e.g. 5x) from `start_sec` to `end_sec`, which
 must both lie *before* the bag's first message stamp. Bag playback then takes
-over monotonically at its own start time. It exits on its own; run it before
-`ros2 bag play`.
+over monotonically at its own start time.
+
+It does NOT exit at end_sec: it holds /clock there until it is killed. Exiting
+once made lifecycle activation stall whenever configuration took longer than the
+preroll -- sim time froze, the remaining nodes never came up and the run died
+with "lifecycle never active". The caller (run_variant.py) kills it as soon as
+every node is active, then starts playback.
 """
 
 import time
@@ -35,6 +40,7 @@ class ClockPreroll(Node):
         self.pub = self.create_publisher(Clock, "/clock", 10)
         self.wall0 = time.monotonic()
         self.finished = False
+        self._announced = False
         self.create_timer(1.0 / self.tick_hz, self.tick)
         self.get_logger().info(
             f"preroll {self.start:.3f} -> {self.end:.3f} at {self.rate}x")
@@ -50,15 +56,17 @@ class ClockPreroll(Node):
         msg.clock.sec = sec
         msg.clock.nanosec = int((sim - sec) * 1e9)
         self.pub.publish(msg)
-        if self.finished:
-            self.get_logger().info(f"preroll done at {sim:.3f}")
+        if self.finished and not self._announced:
+            self._announced = True
+            self.get_logger().info(
+                f"preroll reached {sim:.3f}; holding until killed")
 
 
 def main():
     rclpy.init()
     node = ClockPreroll()
     try:
-        while rclpy.ok() and not node.finished:
+        while rclpy.ok():
             rclpy.spin_once(node, timeout_sec=0.05)
     except KeyboardInterrupt:
         pass

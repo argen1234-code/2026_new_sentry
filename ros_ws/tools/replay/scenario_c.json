@@ -1,0 +1,80 @@
+{
+  "_comment": "Recorded 2026-10-30 16:57 (~/bags/crash_repro): 走廊内人工点目标来回 4 趟，无小障碍物。地图 corridor_XXXX（录包时 map_server 加载的就是它）。参照指标由 metrics.py 直接对该包跑出。",
+  "bag": "/home/gzu-prink/bags/crash_repro",
+  "map": "corridor_XXXX.yaml",
+  "goals": [
+    {
+      "t": 16.8,
+      "x": 5.41,
+      "y": -0.12,
+      "yaw": 0.0
+    },
+    {
+      "t": 38.7,
+      "x": 1.21,
+      "y": -0.17,
+      "yaw": 3.14159
+    },
+    {
+      "t": 62.6,
+      "x": 5.14,
+      "y": -0.06,
+      "yaw": 0.0
+    },
+    {
+      "t": 84.2,
+      "x": 0.81,
+      "y": -0.03,
+      "yaw": 3.14159
+    },
+    {
+      "t": 110.4,
+      "x": 6.07,
+      "y": -0.44,
+      "yaw": 0.0
+    },
+    {
+      "t": 134.8,
+      "x": 0.83,
+      "y": 0.07,
+      "yaw": 3.14159
+    },
+    {
+      "t": 160.4,
+      "x": 5.53,
+      "y": -0.32,
+      "yaw": 0.0
+    },
+    {
+      "t": 185.4,
+      "x": 1.47,
+      "y": -0.06,
+      "yaw": 3.14159
+    }
+  ],
+  "reference_metrics": {
+    "duration_s": 203.05,
+    "path_length_m": 50.6,
+    "n_odom": 4062,
+    "n_plans": 485,
+    "replan_hz": 2.39,
+    "final_pose": [
+      1.99,
+      -0.16,
+      3.01
+    ],
+    "max_x": 6.29,
+    "longest_stop_s": 0.25,
+    "stops_ge_05s": 0,
+    "cmd_accel_p95_ms2": 2.57,
+    "speed_moving_median_ms": 0.21453295526224084,
+    "frac_speed_lt_005": 0.0482520925652388,
+    "jitter_p50_m": 0.033651443063934514,
+    "jitter_p90_m": 0.10341113166822599,
+    "jitter_max_m": 0.27883350671241325,
+    "pairs_over_015_frac": 0.07913669064748201,
+    "n_plan_pairs": 278,
+    "min_clearance_m": 0.07,
+    "median_clearance_m": 0.2
+  }
+}
