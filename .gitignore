@@ -67,10 +67,11 @@ stm32_ws/backup/
 # ---- 建图副产物（每次 slam 重写，一次往返可到百 MB）----
 ros_ws/src/sentry_localization/point_lio/PCD/scans.pcd
 
-# ---- 过期的大体积地图资产 ----
-# 217 MB，超过 GitHub 单文件 100 MB 硬限制，推不上去。
-# 需要重现这次建图时从本地备份取，或重建时改用 --voxel 降采样。
-maps/corridor_1029_run1_prior.pcd
+# ---- 大体积地图资产 ----
+# 先验点云体积随场地线性增长（1029 版 217 MB、1030 版 116 MB），都超过 GitHub
+# 单文件 100 MiB 硬限制，推不上去。它们是 point_lio 从录包重建的副产物，
+# 不进版本库；需要时按 docs/ 里的建图流程重跑，或从本地备份取。
+maps/*_prior.pcd
 # 放在 maps/ 下的录制 bag（*_0.db3 已被上面的 *.db3 忽略，这里连 metadata.yaml 一起挡掉）
 maps/corridor_1029_run1/
 
