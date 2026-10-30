@@ -19,6 +19,7 @@
 #include <string>
 #include <vector>
 
+#include "geometry_msgs/msg/point.hpp"
 #include "nav2_core/controller.hpp"
 #include "pb_omni_pid_pursuit_controller/pid.hpp"
 #include "visualization_msgs/msg/marker_array.hpp"
@@ -192,9 +193,16 @@ protected:
   /**
    * @brief Checks if collision is detected along the given path
    * @param path Local path to check for collisions
+   * @param hit_point If non-null, receives the position of the first colliding pose
+   * @param hit_cost If non-null, receives the costmap cost at that pose
+   * @param hit_mx If non-null, receives the costmap cell column of that pose
+   * @param hit_my If non-null, receives the costmap cell row of that pose
    * @return True if collision detected, false otherwise
    */
-  bool isCollisionDetected(const nav_msgs::msg::Path & path);
+  bool isCollisionDetected(
+    const nav_msgs::msg::Path & path, geometry_msgs::msg::Point * hit_point = nullptr,
+    unsigned char * hit_cost = nullptr, unsigned int * hit_mx = nullptr,
+    unsigned int * hit_my = nullptr);
 
 private:
   /**

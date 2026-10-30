@@ -293,29 +293,54 @@ geometry_msgs::msg::TwistStamped OmniPidPursuitController::computeVelocityComman
   // Transform local frame to global frame to use in collision checking
   nav_msgs::msg::Path costmap_frame_local_plan;
 
-  int sample_points = 10;
+  // 按弧长等距采样（每 0.05 m 一点），替代原来的固定 10 点。
+  // 原实现把 10 点铺满 2.5 m 局部路径，采样间距约 0.27 m；窄于该间距的障碍会整段落在
+  // 两个采样点之间而检不出来，实测车体曾贴到 0.23 m（< robot_radius 0.26 m）即由此而来。
+  constexpr double sample_spacing = 0.05;  // 与局部代价地图分辨率一致
+  // 车体半径内不检查：自车点云落在这一带，查了会误报（原实现只跳过 index 0）。
+  // 该值需与 nav2_params.yaml 的 local_costmap.robot_radius 保持一致。
+  constexpr double min_check_dist = 0.26;
+
+  double arc = 0.0;
+  double next_sample = 0.0;
   int plan_size = transformed_plan.poses.size();
-  for (int i = 0; i < sample_points; ++i) {
-    int index = std::min((i * plan_size) / sample_points, plan_size - 1);
-    // 跳过路径起点（机器人当前位置），避免车体内部点云导致的误报
-    if (index == 0) continue;
+  for (int i = 0; i < plan_size; ++i) {
+    const auto & cur = transformed_plan.poses[i].pose.position;
+    if (i > 0) {
+      const auto & prev = transformed_plan.poses[i - 1].pose.position;
+      arc += std::hypot(cur.x - prev.x, cur.y - prev.y);
+    }
+    if (std::hypot(cur.x, cur.y) < min_check_dist || arc < next_sample) continue;
+    next_sample = arc + sample_spacing;
     geometry_msgs::msg::PoseStamped map_pose;
-    transformPose(costmap_ros_->getGlobalFrameID(), transformed_plan.poses[index], map_pose);
+    transformPose(costmap_ros_->getGlobalFrameID(), transformed_plan.poses[i], map_pose);
     costmap_frame_local_plan.poses.push_back(map_pose);
   }
 
   geometry_msgs::msg::TwistStamped cmd_vel;
   cmd_vel.header = pose.header;
-  if (!isCollisionDetected(costmap_frame_local_plan)) {
+  geometry_msgs::msg::Point hit_point;
+  unsigned char hit_cost = 0;
+  unsigned int hit_mx = 0;
+  unsigned int hit_my = 0;
+  if (!isCollisionDetected(
+      costmap_frame_local_plan, &hit_point, &hit_cost, &hit_mx, &hit_my)) {
     // 偏角超阈值时只转动；低于阈值时全向运动（x/y）同时持续修正朝向（w）
     cmd_vel.twist.linear.x = lin_vel * cos(theta_dist);
     cmd_vel.twist.linear.y = lin_vel * sin(theta_dist);
     cmd_vel.twist.angular.z = angular_vel;
   } else {
     // When collision is detected, send zero velocity command to stop the robot
+    // 打印命中点及其在代价地图里的格子索引与图元信息：用于判断控制器读到的
+    // 代价地图与发布的 /local_costmap/costmap 是否同一份
+    nav2_costmap_2d::Costmap2D * cm = costmap_ros_->getCostmap();
     RCLCPP_WARN_THROTTLE(
       logger_, *(clock_), 1000,
-      "Collision detected in the trajectory. Sending zero velocity command!");
+      "Collision detected at (%.3f, %.3f) in %s -> cell=(%u,%u) cost=%u; "
+      "map origin=(%.3f,%.3f) res=%.3f size=%ux%u. Sending zero velocity command!",
+      hit_point.x, hit_point.y, costmap_ros_->getGlobalFrameID().c_str(), hit_mx, hit_my,
+      static_cast<unsigned int>(hit_cost), cm->getOriginX(), cm->getOriginY(),
+      cm->getResolution(), cm->getSizeInCellsX(), cm->getSizeInCellsY());
     cmd_vel.twist.linear.x = 0.0;
     cmd_vel.twist.linear.y = 0.0;
     cmd_vel.twist.angular.z = 0.0;
@@ -495,14 +520,29 @@ bool OmniPidPursuitController::transformPose(
   return false;
 }
 
-bool OmniPidPursuitController::isCollisionDetected(const nav_msgs::msg::Path & path)
+bool OmniPidPursuitController::isCollisionDetected(
+  const nav_msgs::msg::Path & path, geometry_msgs::msg::Point * hit_point,
+  unsigned char * hit_cost, unsigned int * hit_mx, unsigned int * hit_my)
 {
   auto costmap = costmap_ros_->getCostmap();
   for (const auto & pose_stamped : path.poses) {
     const auto & pose = pose_stamped.pose;
     unsigned int mx, my;
     if (costmap->worldToMap(pose.position.x, pose.position.y, mx, my)) {
-      if (costmap->getCost(mx, my) >= nav2_costmap_2d::INSCRIBED_INFLATED_OBSTACLE) {
+      const unsigned char cost = costmap->getCost(mx, my);
+      if (cost >= nav2_costmap_2d::INSCRIBED_INFLATED_OBSTACLE) {
+        if (hit_point) {
+          *hit_point = pose.position;
+        }
+        if (hit_cost) {
+          *hit_cost = cost;
+        }
+        if (hit_mx) {
+          *hit_mx = mx;
+        }
+        if (hit_my) {
+          *hit_my = my;
+        }
         return true;
       }
     } else {

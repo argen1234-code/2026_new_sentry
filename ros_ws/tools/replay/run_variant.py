@@ -240,14 +240,17 @@ def run_one(name, variant, args, out_root):
                    "crop": args.crop, "bag": args.bag, "bag_start": bag_start}, f, indent=2)
 
     log(f"=== {run_id}: {variant.get('label','')}")
-    launch = spawn([
+    launch_args = [
         "ros2", "launch", os.path.join(HERE, "replay.launch.py"),
         f"params_file:={params}",
         f"plant_json:={plant}",
         f"crop:={'true' if args.crop else 'false'}",
         f"map:={args.map}",
         f"rviz:={'true' if (args.rviz or args.manual) else 'false'}",
-    ], tag("launch.log"))
+    ]
+    if args.map_odom_z is not None:
+        launch_args.append(f"map_odom_z:={args.map_odom_z}")
+    launch = spawn(launch_args, tag("launch.log"))
 
     preroll = spawn([
         "python3", os.path.join(HERE, "clock_preroll.py"), "--ros-args",
@@ -345,6 +348,8 @@ def main():
     ap.add_argument("--goal-timeout", type=float, default=200.0)
     ap.add_argument("--lifecycle-timeout", type=float, default=90.0)
     ap.add_argument("--tag", default="")
+    ap.add_argument("--map-odom-z", type=float, default=None,
+                    help="override map_odom_z (live runs measure ~0.189)")
     ap.add_argument("--force", action="store_true")
     ap.add_argument("--manual", action="store_true",
                     help="skip goal_schedule; drive goals from RViz and Ctrl-C to finish")

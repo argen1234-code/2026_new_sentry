@@ -365,7 +365,7 @@ controller_server:
     progress_checker:
       plugin: "nav2_controller::SimpleProgressChecker"
       required_movement_radius: 0.1  # 原地转向时也允许控制器获得进展
-      movement_time_allowance: 60.0  # 增加到15秒，给转向留出足够时间
+      movement_time_allowance: 10.0  # 增加到15秒，给转向留出足够时间
     general_goal_checker:
       stateful: True
       plugin: "nav2_controller::SimpleGoalChecker"
@@ -383,11 +383,11 @@ controller_server:
       rotation_kd: 0.8      # 增加旋转微分项，提高阻尼，减少震荡
       transform_tolerance: 0.1
       min_max_sum_error: 1.0
-      lookahead_dist: 1.2   # 增加前瞻距离，使轨迹更平滑
+      lookahead_dist: 2.0
       use_velocity_scaled_lookahead_dist: true
-      lookahead_time: 1.5   # 增加前瞻时间，提前预判路径
+      lookahead_time: 1.0
       min_lookahead_dist: 0.5  # 增加最小前瞻距离
-      max_lookahead_dist: 2.5  # 增加最大前瞻距离
+      max_lookahead_dist: 1.0
       use_interpolation: true  # 启用插值，使路径更平滑
       use_rotate_to_heading: true  # 启用先转向再移动，角度偏差大时先原地转向
       use_rotate_to_heading_treshold: 0.7   # 偏角阈值（弧度，约28.6度），超过此值先原地转向
@@ -494,7 +494,7 @@ global_costmap:
         origin_z: 0.0
         unknown_threshold: 5
         z_resolution: 0.05
-        z_voxels: 16
+        z_voxels: 24
         min_obstacle_height: 0.0
         max_obstacle_height: 2.0
         min_obstacle_intensity: 0.1
@@ -538,7 +538,7 @@ map_saver:
 planner_server:
   ros__parameters:
     use_sim_time: False
-    expected_planner_frequency: 5.0  # 降低规划频率，减少路径跳动
+    expected_planner_frequency: 10.0
     # action_server_result_timeout 已删：Humble 1.1.20 的任何库里都没有这个参数名
     # （已 grep 整个 /opt/ros/humble/lib），它是 Nav2 Iron+ 才有的键，写在这里无效。
     planner_plugins: ["GridBased"]
@@ -551,8 +551,6 @@ planner_server:
       w_euc_cost: 1.0
       w_traversal_cost: 10.0
       w_heuristic_cost: 1.0
-      allow_unknown: true  # 允许在未知区域规划
-      use_final_approach_orientation: true  # 要求规划器尊重终点朝向，配合 yaw_goal_tolerance 使用
 
 smoother_server:
   ros__parameters:
