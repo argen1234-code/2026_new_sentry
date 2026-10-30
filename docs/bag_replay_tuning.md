@@ -3,7 +3,8 @@
 > 目的：不碰实车、不使能底盘，用**录好的实车点云**闭环驱动**真实 nav2 代码**，
 > 把「参数 → 指标」的对照实验从「一次 3 分钟、要有人走位」变成可重复的离线跑批。
 > 台架代码在 [`ros_ws/tools/replay/`](../ros_ws/tools/replay/)，2026-10-29 首次跑通。
-> 踩坑条目另见 [`pitfalls.md`](pitfalls.md)；参数取值见 [`parameters.md`](parameters.md)。
+> 踩坑条目另见 [`pitfalls.md`](pitfalls.md)；参数取值见 [`parameters.md`](parameters.md)；
+> 调参流程与症状→参数对照见 [`nav2_tuning.md`](nav2_tuning.md)。
 
 ## 一、能做什么、不能做什么
 
