@@ -90,9 +90,9 @@ def generate_launch_description():
         DeclareLaunchArgument("autostart", default_value="true"),
         DeclareLaunchArgument(
             "chassis_model",
-            default_value="omni_round",
-            choices=["sentry_2026", "mecanum", "sentry", "omni_round"],
-            description="Static chassis model: official 2026, mecanum training car, earlier steering sentry, or round omni chassis",
+            default_value="test_chassis",
+            choices=["sentry_2026", "mecanum", "sentry", "test_chassis"],
+            description="Static chassis model: official 2026, mecanum training car, earlier steering sentry, or test chassis CAD export",
         ),
         DeclareLaunchArgument(
             "chassis_transport",

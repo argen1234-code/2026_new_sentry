@@ -1,0 +1,181 @@
+<?xml version="1.0"?>
+<!--
+  Test chassis, CAD export（测试底盘模型1.STEP，StackForce CAD Importer 导出）.
+
+  这是实车测试底盘的正式模型，用来替换 2026-10-23 那版「粗略建模」的
+  omni_round.urdf.xacro（该文件已删除）。网格是原 CAD 的按零件导出，没做减面：
+    meshes/test_chassis/chassis.stl  27 MB / 546518 面  —— 车体 + 四个全向轮
+    meshes/test_chassis/lidar.stl    2.3 KB / 44 面     —— MID360
+
+  ── 坐标系换算（重要，别照导出包的声明走）─────────────────────────
+  导出包 export_report.json 声明 coordinate_frame = "z_up_x_forward"，
+  但网格几何实际是 **Y 朝上**。三条独立旁证：
+    1. 四轮接地点在 CAD (X, Z) = (±164.5, ±164.5) mm，关于原点对称，
+       而轮子只可能在水平面上铺开 —— 所以 X/Z 是水平轴，Y 才是竖直轴；
+    2. part_001 的包围盒 X 完全对称（±228.59），Y 却偏在 -73.55..116.25，
+       底盘模型不可能在竖直方向偏成这样，水平方向才该严格对称；
+    3. 雷达圆柱轴线 (0, 0.9397, 0.342) 正是「竖直轴再前倾 20°」的形状。
+  所以按 x_ros = Z_cad, y_ros = X_cad, z_ros = Y_cad 置换，
+  对应 URDF rpy = (pi/2, 0, pi/2)。
+
+  ── 实测尺寸（脚本量的，不是估的）─────────────────────────────
+    CAD 原点     = 四轮接地点的中心 ⇒ 旋转中心，就是本模型的 base_link
+    轮心半径     = 0.2326 m（接地点到中心 232.6 mm）
+    轮半径/离地  = 0.073555 m（part_001 最低点 y = -73.55 mm）
+    车体包围盒   = x -0.2286..0.2729, y ±0.2286, z -0.0736..0.1163 m
+    雷达圆柱     = 顶面圆心 (0, 121.95, 246.01)、底面圆心 (0, 82.48, 231.65) mm，
+                   轴 (0, 0.9397, 0.342) ⇒ 俯仰 20.00°，长 42 mm，半径 32.5 mm
+
+  ── 帧树 ────────────────────────────────────────────────────────
+    base_footprint  地面投影（Nav2 base_frame，z = 0）
+    base_link       轴心平面圆心，离地 0.073555 m；视觉/碰撞几何挂在这里
+    gimbal_yaw      兼容帧：本车没有云台，固定在 base_link
+                    （Nav2 robot_base_frame / fake_vel_transform 要用）
+    imu_link        兼容帧：usb_bridge 的 /imu/... 用这个名字，与 base_link 重合
+    front_mid360    雷达光心，在 base_link 坐标系下 (0.24601, 0, 0.12195)，
+                    前倾 20°（+0.34907 rad 俯仰）
+    wheel_*         四个全向轮的空帧，关节名与 usb_bridge 的 WHEEL_JOINTS 一致
+
+  帧名不要动：Nav2 / 定位 / 感知的配置引用 base_footprint、gimbal_yaw、front_mid360。
+
+  ── 相对旧 omni_round 模型的差别 ─────────────────────────────────
+  雷达 x 0.200 → 0.24601（+46.0 mm）、z 0.200 → 0.195505（-4.5 mm）、
+  俯仰 0 → 20°。物理上雷达「马上会这样装」但截至 2026-11-01 **尚未安装**，
+  所以本模型描述的是即将实施的状态；在这之前建的先验 PCD 与换装后的
+  传感器位姿不匹配，换装后要重新建图。
+  换装后还要复测 pointcloud_to_laserscan 的 min_height / min_intensity
+  （docs/chassis_calibration.md 4.1）。
+
+  这是可视化 / TF 模型：没有 ros2_control，惯量只是量级上合理的值。
+-->
+<robot name="test_chassis" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!-- 网格用 package:// 引用（与本包其它 URDF 一致）。用 $(find ...) 展开成绝对路径时
+       RViz 报 "Error retrieving file"，虽然 resource_retriever 单独测能读，别踩。 -->
+  <xacro:property name="mesh_dir" value="package://sentry_description/meshes/test_chassis"/>
+
+  <!-- ===== 实测几何（改这里）===== -->
+  <!-- CAD 原点离地高度 = 车轮半径。part_001 最低点 y = -73.555 mm。 -->
+  <xacro:property name="wheel_radius" value="0.073555"/>
+  <!-- 轮心到车体中心的水平距离，由接地点的 232.6 mm 得到。 -->
+  <xacro:property name="wheel_mount_radius" value="0.2326"/>
+  <!-- 车体包围盒，用作简化碰撞盒（不拿 546k 面做碰撞）。 -->
+  <xacro:property name="body_size_x" value="0.501461"/>
+  <xacro:property name="body_size_y" value="0.457178"/>
+  <xacro:property name="body_size_z" value="0.189805"/>
+  <xacro:property name="body_centre_x" value="0.022142"/>
+  <xacro:property name="body_centre_z" value="0.021348"/>
+  <!-- 雷达光心＝圆柱顶面圆心，base_link 坐标系下的位置与俯仰角。 -->
+  <xacro:property name="lidar_x" value="0.24601"/>
+  <xacro:property name="lidar_y" value="0.0"/>
+  <xacro:property name="lidar_z" value="0.12195"/>
+  <xacro:property name="lidar_pitch" value="0.34907"/>
+  <!-- 雷达网格在 front_mid360 坐标系里的摆放：R_v = R_L^T * P, t_v = -R_L^T * O。
+       已用「圆柱底面圆心」正反算验证闭合，改上面任何一项都要重算这两个。 -->
+  <xacro:property name="lidar_visual_xyz" value="-0.189464 0 -0.198736"/>
+  <xacro:property name="lidar_visual_rpy" value="1.221731 0 1.570796"/>
+
+  <material name="body_gray"><color rgba="0.72 0.75 0.79 1.0"/></material>
+  <material name="body_dark"><color rgba="0.28 0.30 0.34 1.0"/></material>
+  <material name="wheel_dark"><color rgba="0.10 0.10 0.12 1.0"/></material>
+  <material name="lidar_dark"><color rgba="0.18 0.20 0.24 1.0"/></material>
+
+  <!-- ===== 地面投影 ===== -->
+  <link name="base_footprint"/>
+
+  <joint name="base_footprint_to_base_link" type="fixed">
+    <parent link="base_footprint"/>
+    <child link="base_link"/>
+    <origin xyz="0 0 ${wheel_radius}" rpy="0 0 0"/>
+  </joint>
+
+  <!-- ===== 车体（CAD 网格，轴置换见文件头）===== -->
+  <link name="base_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="${pi / 2} 0 ${pi / 2}"/>
+      <geometry>
+        <mesh filename="${mesh_dir}/chassis.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="body_gray"/>
+    </visual>
+    <collision>
+      <origin xyz="${body_centre_x} 0 ${body_centre_z}" rpy="0 0 0"/>
+      <geometry>
+        <box size="${body_size_x} ${body_size_y} ${body_size_z}"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <origin xyz="${body_centre_x} 0 ${body_centre_z}" rpy="0 0 0"/>
+      <!-- 导出包里的质量：base_link 3.2044939 kg + 雷达 0.159705 kg。 -->
+      <mass value="3.364199"/>
+      <inertia ixx="0.071" ixy="0" ixz="0"
+               iyy="0.065" iyz="0"
+               izz="0.052"/>
+    </inertial>
+  </link>
+
+  <!-- ===== 兼容帧 ===== -->
+  <link name="gimbal_yaw"/>
+  <joint name="gimbal_yaw_fixed_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="gimbal_yaw"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
+  <link name="imu_link"/>
+  <joint name="imu_link_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="imu_link"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
+  <!-- ===== 四个全向轮：只有关节，没有几何 =====
+       网格里已经画了轮子，这里再画会重影；保留关节是为了让 usb_bridge 继续
+       发布 serial/joint_states_raw 的 wheel_*_joint，方便看转速。 -->
+  <xacro:macro name="omni_wheel_frame" params="name angle">
+    <link name="${name}"/>
+    <joint name="${name}_joint" type="continuous">
+      <parent link="base_link"/>
+      <child link="${name}"/>
+      <origin xyz="${wheel_mount_radius * cos(angle)} ${wheel_mount_radius * sin(angle)} 0"
+              rpy="0 ${pi / 2} ${angle}"/>
+      <axis xyz="0 0 1"/>
+      <limit effort="20.0" velocity="50.0"/>
+    </joint>
+  </xacro:macro>
+
+  <!-- 关节名与 usb_bridge 的 WHEEL_JOINTS 一致。 -->
+  <xacro:omni_wheel_frame name="wheel_front_left"  angle="${pi / 4}"/>
+  <xacro:omni_wheel_frame name="wheel_front_right" angle="${-pi / 4}"/>
+  <xacro:omni_wheel_frame name="wheel_back_left"   angle="${3 * pi / 4}"/>
+  <xacro:omni_wheel_frame name="wheel_back_right"  angle="${-3 * pi / 4}"/>
+
+  <!-- ===== 雷达 ===== -->
+  <link name="front_mid360">
+    <visual>
+      <origin xyz="${lidar_visual_xyz}" rpy="${lidar_visual_rpy}"/>
+      <geometry>
+        <mesh filename="${mesh_dir}/lidar.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="lidar_dark"/>
+    </visual>
+    <inertial>
+      <!-- 导出包里的雷达惯量原点：圆柱中心，距顶面圆心 21 mm。 -->
+      <origin xyz="0 0 -0.021" rpy="0 0 0"/>
+      <mass value="0.159705"/>
+      <inertia ixx="0.00009" ixy="0" ixz="0"
+               iyy="0.00009" iyz="0"
+               izz="0.00008"/>
+    </inertial>
+  </link>
+
+  <!-- joint 原点＝光心＝圆柱顶面圆心；rpy 的俯仰 20° 就是模型里圆柱的倾角。
+       注意：这个 TF 只影响 front_mid360 相对 base_link 的位置，
+       point_lio 的雷达→IMU 外参在 config/point_lio_mid360.yaml 里，不读 URDF。 -->
+  <joint name="joint_lidar" type="fixed">
+    <parent link="gimbal_yaw"/>
+    <child link="front_mid360"/>
+    <origin xyz="${lidar_x} ${lidar_y} ${lidar_z}" rpy="0 ${lidar_pitch} 0"/>
+  </joint>
+
+</robot>

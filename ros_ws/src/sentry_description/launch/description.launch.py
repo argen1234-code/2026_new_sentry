@@ -29,8 +29,8 @@ def launch_setup(context: LaunchContext):
         "mecanum": "mecanum_static.urdf",
         # Earlier steering-wheel sentry export, kept as a fallback.
         "sentry": "robot.urdf",
-        # Round four-omni-wheel chassis used with chassis_fw.
-        "omni_round": "omni_round.urdf.xacro",
+        # Real test chassis, CAD export (default).
+        "test_chassis": "test_chassis.urdf.xacro",
     }
     if override:
         urdf_path = override
@@ -98,11 +98,11 @@ def generate_launch_description():
         DeclareLaunchArgument("use_sim_time", default_value="false"),
         DeclareLaunchArgument(
             "chassis_model",
-            default_value="omni_round",
-            choices=["sentry_2026", "mecanum", "sentry", "omni_round"],
+            default_value="test_chassis",
+            choices=["sentry_2026", "mecanum", "sentry", "test_chassis"],
             description=(
                 "Static robot model: 2026 official chassis, mecanum training chassis, "
-                "the earlier steering sentry, or the round omni chassis"
+                "the earlier steering sentry, or the test chassis CAD export"
             ),
         ),
         DeclareLaunchArgument(

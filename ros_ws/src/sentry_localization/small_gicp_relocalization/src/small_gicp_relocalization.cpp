@@ -131,6 +131,7 @@ void SmallGicpRelocalizationNode::loadGlobalMap(const std::string & file_name)
       rclcpp::sleep_for(std::chrono::seconds(1));
     }
   }
+  odom_to_lidar_odom.linear().setIdentity();
   pcl::transformPointCloud(*global_map_, *global_map_, odom_to_lidar_odom);
 }
 

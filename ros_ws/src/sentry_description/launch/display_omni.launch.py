@@ -1,9 +1,10 @@
-"""Show the standalone round omni-wheel model: robot_state_publisher + RViz.
+"""Show the standalone test chassis model: robot_state_publisher + RViz.
 
     ros2 launch sentry_description display_omni.launch.py
 
 Only URDF/TF is published; no drivers, no Nav2. The four wheel joints are
 continuous, so joint_state_publisher feeds zeros and the wheels stay at 0 rad.
+The wheels carry no geometry here: the CAD mesh already draws them.
 """
 
 import os
@@ -19,7 +20,7 @@ from launch_ros.actions import Node
 
 def generate_launch_description():
     share = get_package_share_directory("sentry_description")
-    xacro_path = os.path.join(share, "urdf", "omni_round.urdf.xacro")
+    xacro_path = os.path.join(share, "urdf", "test_chassis.urdf.xacro")
     robot_description = xacro.process_file(xacro_path).toxml()
 
     use_rviz = LaunchConfiguration("use_rviz")
@@ -29,7 +30,7 @@ def generate_launch_description():
         DeclareLaunchArgument("use_rviz", default_value="true"),
         DeclareLaunchArgument(
             "rviz_config_file",
-            default_value=os.path.join(share, "rviz", "omni_round.rviz"),
+            default_value=os.path.join(share, "rviz", "test_chassis.rviz"),
         ),
         Node(
             package="joint_state_publisher",
@@ -48,7 +49,7 @@ def generate_launch_description():
             condition=IfCondition(use_rviz),
             package="rviz2",
             executable="rviz2",
-            name="omni_round_rviz",
+            name="test_chassis_rviz",
             output="screen",
             arguments=["-d", rviz_config],
         ),
