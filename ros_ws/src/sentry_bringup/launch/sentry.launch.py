@@ -111,6 +111,16 @@ def generate_launch_description():
             description="Allow /cmd_vel to drive the chassis over USB (safety gate)",
         ),
         DeclareLaunchArgument(
+            "enable_decision",
+            default_value="true",
+            description="Start sentry_decision auto-navigation. Set false for manual / replay tuning",
+        ),
+        DeclareLaunchArgument(
+            "enable_referee",
+            default_value="true",
+            description="Start referee_serial_bridge. Set false when its device collides with the chassis CDC",
+        ),
+        DeclareLaunchArgument(
             "visualization",
             default_value="rviz",
             description="Visualization backend: rviz, foxglove, or headless",
@@ -184,9 +194,10 @@ def generate_launch_description():
                               "udp_port": LaunchConfiguration("udp_port")}]),
             Node(package="referee_serial_bridge", executable="referee_serial_bridge_node",
                  name="referee_serial_bridge", output="screen",
-                 parameters=[{"device": LaunchConfiguration("referee_device")}]),
+                 parameters=[{"device": LaunchConfiguration("referee_device")}],
+                 condition=IfCondition(LaunchConfiguration("enable_referee"))),
             include("sentry_decision", "sentry_decision_launch.py", {
                 "params_file": os.path.join(decision_share, "config", "sentry_decision_params.yaml"),
-            }),
+            }, condition=IfCondition(LaunchConfiguration("enable_decision"))),
         ]),
     ])
