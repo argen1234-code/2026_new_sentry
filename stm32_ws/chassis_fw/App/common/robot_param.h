@@ -295,10 +295,10 @@ extern "C" {
 
 /* ========================= 底盘轮速 PID 与积分清理 ========================= */
 #define CHASSIS_SPEED_PI_KP               1600.0f            // 底盘轮速 PID 比例系数，单位 电流命令计数/(m/s)
-#define CHASSIS_SPEED_PI_KI               45.0f              // 底盘轮速 PID 积分系数，单位 电流命令计数/m
+#define CHASSIS_SPEED_PI_KI               2000.0f            // 底盘轮速 PID 积分系数，单位 电流命令计数/m
 #define CHASSIS_SPEED_PI_KD               100.0f             // 底盘轮速 PID 微分系数，单位 电流命令计数/(m/s^2)
 #define CHASSIS_SPEED_PI_MAX_OUT          4800.0f            // 底盘轮速 PID 输出限幅，单位 电流命令计数
-#define CHASSIS_SPEED_PI_MAX_IOUT         650.0f             // 底盘轮速 PID 积分限幅，单位 电流命令计数
+#define CHASSIS_SPEED_PI_MAX_IOUT         1200.0f            // 底盘轮速 PID 积分限幅，单位 电流命令计数
 #define CHASSIS_ZERO_SPEED_I_CLEAR_CYCLES 1U                 // 零输入且轮速归零后立即清理速度 PI 积分
 
 /* ========================= 底盘电流与功率限幅 ========================= */
@@ -346,10 +346,10 @@ extern "C" {
 #define M3508_REDUCTION_RATIO             19.2032f           // M3508 减速比
 #define CHASSIS_EFFICIENCY                0.92f              // 底盘传动效率
 #define M3508_MAX_CONT_TORQUE             2.8f               // M3508 电机持续输出转矩上限，单位 N*m
-#define CHASSIS_FF_VISCOUS_GAIN           0.100f             // 黏性摩擦前馈系数，单位 电流命令计数/(m/s)
-#define CHASSIS_FF_COULOMB_CURRENT        0.80f              // 库仑摩擦前馈电流，单位 电流命令计数
+#define CHASSIS_FF_VISCOUS_GAIN           120.0f             // 黏性摩擦前馈系数，单位 电流命令计数/(m/s)
+#define CHASSIS_FF_COULOMB_CURRENT        200.0f             // 库仑摩擦前馈电流，单位 电流命令计数
 #define CHASSIS_FF_COULOMB_SPEED_EPS      0.08f              // 库仑摩擦平滑速度阈值，单位 m/s
-#define CHASSIS_FF_STATIC_CURRENT         40.0f              // 静摩擦前馈电流，单位 电流命令计数
+#define CHASSIS_FF_STATIC_CURRENT         350.0f             // 静摩擦前馈电流，单位 电流命令计数
 #define CHASSIS_FF_STATIC_SPEED_EPS       0.05f              // 静摩擦平滑速度阈值，单位 m/s
 #define CHASSIS_BRAKE_FRICTION_FF_SCALE   0.0f               // 制动状态摩擦前馈保留比例
 #define CHASSIS_BRAKE_FF_CURRENT_A        0.0f               // 制动状态固定制动前馈电流，单位 A
