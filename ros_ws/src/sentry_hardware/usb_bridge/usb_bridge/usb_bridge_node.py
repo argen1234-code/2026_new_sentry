@@ -15,10 +15,13 @@ import time
 
 import rclpy
 from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
+from geometry_msgs.msg import TransformStamped
+from nav_msgs.msg import Odometry
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from sensor_msgs.msg import Imu, JointState
 from sentry_interfaces.msg import ChassisState, UnifiedCmd, UsbBridgeState
+from tf2_ros import TransformBroadcaster
 
 import serial
 from serial.tools import list_ports
@@ -28,10 +31,12 @@ from .protocol import (
     ID_IMU_STATE,
     ID_MCU_HEARTBEAT,
     ID_MCU_STATE,
+    ID_ODOM_STATE,
     ID_WHEEL_STATE,
     ZeroUnifiedCmd,
     decode_imu_state,
     decode_mcu_state,
+    decode_odom_state,
     decode_wheel_state,
     encode_host_heartbeat,
     encode_unified_cmd,
@@ -67,6 +72,13 @@ class UsbBridge(Node):
         self.declare_parameter('wheel_radius', WHEEL_RADIUS_M)
         self.declare_parameter('wheel_position_wrap_rad', WHEEL_POSITION_WRAP_RAD)
         self.declare_parameter('wheel_joint_signs', WHEEL_JOINT_SIGNS)
+        # 外置里程计（0x85）：车体系相对 base_footprint 的航向，与
+        # cmd_vel_to_unified.frame_yaw 同源；标定前先沿用该值。
+        self.declare_parameter('wheel_odom_frame_yaw_deg', -135.0)
+        self.declare_parameter('wheel_odom_scale', 1.0)
+        self.declare_parameter('wheel_odom_publish_tf', False)
+        self.declare_parameter('odom_wheel_frame', 'odom_wheel')
+        self.declare_parameter('odom_base_frame', 'base_footprint')
 
         self.port_param = str(self.get_parameter('port').value)
         self.baud = int(self.get_parameter('baud').value)
@@ -80,6 +92,15 @@ class UsbBridge(Node):
             self.get_parameter('wheel_position_wrap_rad').value)
         self.wheel_signs = [float(v) for v in
                             self.get_parameter('wheel_joint_signs').value]
+        self.odom_frame_yaw = math.radians(
+            float(self.get_parameter('wheel_odom_frame_yaw_deg').value))
+        self.odom_scale = float(self.get_parameter('wheel_odom_scale').value)
+        self.odom_publish_tf = bool(
+            self.get_parameter('wheel_odom_publish_tf').value)
+        self.odom_parent_frame = str(
+            self.get_parameter('odom_wheel_frame').value)
+        self.odom_child_frame = str(
+            self.get_parameter('odom_base_frame').value)
 
         self.ser = None
         self.port_name = None
@@ -99,16 +120,23 @@ class UsbBridge(Node):
         # Dynamic state and per-wheel position unwrapping.
         self.wheel_state = None
         self.imu_state = None
+        self.odom_state = None
         self.last_wheel_seq = None
         self.last_imu_seq = None
+        self.last_odom_seq = None
         self.wheel_seq_gaps = 0
         self.imu_seq_gaps = 0
+        self.odom_seq_gaps = 0
+        # 模块 yaw 是上电绝对角，软件侧取首帧偏移；XY 原点由固件负责。
+        self.odom_yaw0 = None
         self.wheel_last_raw = [None] * 4
         self.wheel_unwrapped = [0.0] * 4
 
         self.state_pub = self.create_publisher(UsbBridgeState, '/usb_bridge/state', 10)
         self.chassis_pub = self.create_publisher(ChassisState, '/chassis/state', 10)
         self.imu_pub = self.create_publisher(Imu, '/imu/data', 10)
+        self.odom_pub = self.create_publisher(Odometry, '/wheel_odom', 10)
+        self.tf_broadcaster = TransformBroadcaster(self) if self.odom_publish_tf else None
         self.joint_pub = self.create_publisher(JointState, 'serial/joint_states_raw', 10)
         self.diag_pub = self.create_publisher(DiagnosticArray, '/diagnostics', 10)
         self.create_subscription(UnifiedCmd, '/unified_cmd', self.on_unified_cmd, 10)
@@ -257,6 +285,17 @@ class UsbBridge(Node):
                 self._track_seq(frame.seq, 'last_imu_seq', 'imu_seq_gaps')
                 self.imu_state = state
                 self.publish_imu_state(state)
+            elif frame.msg_id == ID_ODOM_STATE:
+                self.rx_frames += 1
+                try:
+                    state = decode_odom_state(frame.payload)
+                except ValueError as exc:
+                    self.get_logger().warn(f'Bad odom state frame: {exc}',
+                                           throttle_duration_sec=2.0)
+                    continue
+                self._track_seq(frame.seq, 'last_odom_seq', 'odom_seq_gaps')
+                self.odom_state = state
+                self.publish_odom_state(state)
             elif frame.msg_id == ID_MCU_HEARTBEAT:
                 self.rx_frames += 1
             else:
@@ -396,6 +435,64 @@ class UsbBridge(Node):
 
         self.imu_pub.publish(msg)
 
+    @staticmethod
+    def _wrap_angle(angle):
+        return math.atan2(math.sin(angle), math.cos(angle))
+
+    def publish_odom_state(self, state):
+        if not state['valid']:
+            # 模块断线：不发布陈旧位姿，避免污染 TF / Nav2。
+            return
+
+        # 模块 yaw 是上电绝对角，取首帧偏移；XY 原点由固件清零 + 首帧负责。
+        if self.odom_yaw0 is None:
+            self.odom_yaw0 = state['yaw_rad']
+
+        # 车体系 -> base_footprint：v_base = R(-theta) * v_chassis，
+        # theta = wheel_odom_frame_yaw_deg（与 cmd_vel_to_unified.frame_yaw 同源）。
+        theta = self.odom_frame_yaw
+        c = math.cos(-theta)
+        s = math.sin(-theta)
+        x = (c * state['x_m'] - s * state['y_m']) * self.odom_scale
+        y = (s * state['x_m'] + c * state['y_m']) * self.odom_scale
+        # 航向偏移在两端同时出现，锚定到 t0 后自然抵消，不再减 theta。
+        yaw = self._wrap_angle(state['yaw_rad'] - self.odom_yaw0)
+        vx = c * state['vx_mps'] - s * state['vy_mps']
+        vy = s * state['vx_mps'] + c * state['vy_mps']
+
+        stamp = self.get_clock().now().to_msg()
+
+        msg = Odometry()
+        msg.header.stamp = stamp
+        msg.header.frame_id = self.odom_parent_frame
+        msg.child_frame_id = self.odom_child_frame
+        msg.pose.pose.position.x = x
+        msg.pose.pose.position.y = y
+        msg.pose.pose.orientation.z = math.sin(0.5 * yaw)
+        msg.pose.pose.orientation.w = math.cos(0.5 * yaw)
+        msg.twist.twist.linear.x = vx
+        msg.twist.twist.linear.y = vy
+        msg.twist.twist.angular.z = state['gyro_rad_s']
+        # 占位协方差，尚未标定。
+        msg.pose.covariance[0] = 1e-2
+        msg.pose.covariance[7] = 1e-2
+        msg.pose.covariance[35] = 1e-2
+        msg.twist.covariance[0] = 1e-2
+        msg.twist.covariance[7] = 1e-2
+        msg.twist.covariance[35] = 1e-2
+        self.odom_pub.publish(msg)
+
+        if self.tf_broadcaster is not None:
+            tf = TransformStamped()
+            tf.header.stamp = stamp
+            tf.header.frame_id = self.odom_parent_frame
+            tf.child_frame_id = self.odom_child_frame
+            tf.transform.translation.x = x
+            tf.transform.translation.y = y
+            tf.transform.rotation.z = msg.pose.pose.orientation.z
+            tf.transform.rotation.w = msg.pose.pose.orientation.w
+            self.tf_broadcaster.sendTransform(tf)
+
     def publish_diagnostics(self):
         arr = DiagnosticArray()
         arr.header.stamp = self.get_clock().now().to_msg()
@@ -423,7 +520,11 @@ class UsbBridge(Node):
             'unknown_frames': str(self.unknown_frames),
             'wheel_seq_gaps': str(self.wheel_seq_gaps),
             'imu_seq_gaps': str(self.imu_seq_gaps),
+            'odom_seq_gaps': str(self.odom_seq_gaps),
         }
+        if self.odom_state is not None:
+            values['odom_valid'] = str(self.odom_state['valid'])
+            values['odom_age_ms'] = str(self.odom_state['age_ms'])
         if self.wheel_state is not None:
             values['online_mask'] = str(self.wheel_state['online_mask'])
             values['fault_flags'] = str(self.wheel_state['fault_flags'])

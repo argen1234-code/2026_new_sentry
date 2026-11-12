@@ -13,6 +13,7 @@
 #include <string.h>
 
 #include "bsp_fdcan.h"
+#include "bsp_odom_uart.h"
 #include "chassis_task.h"
 #include "robot_param.h"
 #include "stm32h7xx_hal.h"
@@ -40,10 +41,12 @@ static uint8_t s_seq_state;
 static uint8_t s_seq_heartbeat;
 static uint8_t s_seq_wheel;
 static uint8_t s_seq_imu;
+static uint8_t s_seq_odom;
 
 static uint32_t s_last_state_ms;
 static uint32_t s_last_wheel_ms;
 static uint32_t s_last_imu_ms;
+static uint32_t s_last_odom_ms;
 static uint32_t s_last_hb_ms;
 
 /* ========================= 时间与发送 ========================= */
@@ -125,9 +128,11 @@ void legacy_bridge_init(void)
     s_seq_heartbeat = 0u;
     s_seq_wheel = 0u;
     s_seq_imu = 0u;
+    s_seq_odom = 0u;
     s_last_state_ms = 0u;
     s_last_wheel_ms = 0u;
     s_last_imu_ms = 0u;
+    s_last_odom_ms = 0u;
     s_last_hb_ms = 0u;
 }
 
@@ -287,6 +292,39 @@ static void legacy_send_imu_state(uint32_t now_ms)
     legacy_send(LEGACY_ID_IMU_STATE, &s_seq_imu, payload, LEGACY_IMU_STATE_LEN);
 }
 
+static void legacy_send_odom_state(uint32_t now_ms)
+{
+    uint8_t payload[LEGACY_ODOM_STATE_LEN];
+    odom_state_t odom;
+    uint32_t age_ms = 0u;
+    uint8_t valid = 0u;
+
+    (void)bsp_odom_uart_get(&odom);
+    if (odom.valid)
+    {
+        age_ms = (uint32_t)(now_ms - odom.last_rx_ms);
+        valid = (age_ms <= ODOM_TIMEOUT_MS) ? 1u : 0u;
+    }
+    if (age_ms > 0xFFFFu)
+    {
+        age_ms = 0xFFFFu;
+    }
+
+    legacy_write_u32(&payload[0], now_ms);
+    legacy_write_f32(&payload[4], odom.x_mm * ODOM_MM_TO_M);
+    legacy_write_f32(&payload[8], odom.y_mm * ODOM_MM_TO_M);
+    legacy_write_f32(&payload[12], odom.yaw_deg * ODOM_DEG_TO_RAD);
+    legacy_write_f32(&payload[16], odom.gyro_dps * ODOM_DEG_TO_RAD);
+    legacy_write_f32(&payload[20], odom.vx_mms * ODOM_MM_TO_M);
+    legacy_write_f32(&payload[24], odom.vy_mms * ODOM_MM_TO_M);
+    legacy_write_u32(&payload[28], odom.seq);
+    legacy_write_u16(&payload[32], (uint16_t)age_ms);
+    payload[34] = valid;
+    payload[35] = 0u;
+
+    legacy_send(LEGACY_ID_ODOM_STATE, &s_seq_odom, payload, LEGACY_ODOM_STATE_LEN);
+}
+
 static void legacy_send_heartbeat(uint32_t now_ms)
 {
     uint8_t payload[LEGACY_MCU_HEARTBEAT_LEN];
@@ -353,6 +391,10 @@ void legacy_bridge_tick(void)
     if (legacy_due(now_ms, &s_last_imu_ms, LEGACY_BRIDGE_STATE_PERIOD_MS) != 0u)
     {
         legacy_send_imu_state(now_ms);
+    }
+    if (legacy_due(now_ms, &s_last_odom_ms, LEGACY_BRIDGE_STATE_PERIOD_MS) != 0u)
+    {
+        legacy_send_odom_state(now_ms);
     }
     if (legacy_due(now_ms, &s_last_hb_ms, LEGACY_BRIDGE_HEARTBEAT_PERIOD_MS) != 0u)
     {

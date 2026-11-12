@@ -48,6 +48,10 @@ class CmdVelToUnified(Node):
         self.declare_parameter('frame_yaw', -2.356194490192345)
         # wz keeps its own sign (rotation axis is not affected by frame_yaw).
         self.declare_parameter('sign_wz', 1.0)
+        # 2026-11-12 实测：重标定后的固件把自转类指令放大 1.6-2.2 倍（wz 0.3 -> 0.65 rad/s，
+        # 1.2 -> 1.88 rad/s，雷达 yaw 与里程计陀螺互相印证）。这里按实测增益压回去，
+        # 不烧固件。1/1.70 = 0.59；每 tick 重读，可 `ros2 param set` 现场改。
+        self.declare_parameter('wz_gain', 1.0)
 
         self.enable_motion = bool(self.get_parameter('enable_motion').value)
         self.max_vx = float(self.get_parameter('max_vx').value)
@@ -70,6 +74,7 @@ class CmdVelToUnified(Node):
             f'topic={topic} limits=({self.max_vx},{self.max_vy},{self.max_wz}) '
             f'frame_yaw={self.get_parameter("frame_yaw").value:.4f} '
             f'sign_wz={self.get_parameter("sign_wz").value} '
+            f'wz_gain={self.get_parameter("wz_gain").value} '
             f'rate={rate:.0f}Hz timeout={self.command_timeout:.2f}s')
 
     def _motion_enabled(self):
@@ -115,7 +120,9 @@ class CmdVelToUnified(Node):
         vx = self._clamp(c * vx_ros - s * vy_ros, self.max_vx)
         vy = self._clamp(s * vx_ros + c * vy_ros, self.max_vy)
         wz = self._clamp(
-            float(self.get_parameter('sign_wz').value) * self.last_twist.angular.z,
+            float(self.get_parameter('sign_wz').value)
+            * float(self.get_parameter('wz_gain').value)
+            * self.last_twist.angular.z,
             self.max_wz)
 
         cmd.vx_mm_s = int(round(vx * 1000.0))

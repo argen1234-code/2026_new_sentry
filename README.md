@@ -74,6 +74,9 @@ STM32 固件：见 [`stm32_ws/README.md`](stm32_ws/README.md) 和 [`docs/build.m
 - [`docs/chassis_swap_handover.md`](docs/chassis_swap_handover.md)：换车交接清单（底盘事实、CAN 映射、需要重标的参数）
 - [`docs/corridor_baseline.md`](docs/corridor_baseline.md)：长直走廊建图基线（2026-10-24，含漂移判读方法与实测数据）
 - [`docs/bag_replay_tuning.md`](docs/bag_replay_tuning.md)：rosbag 回放离线调参台架（架构、执行器模型、跑法、指标门槛）
+- [`docs/tdt_z_localization.md`](docs/tdt_z_localization.md)：东北大学 TDT 哨兵定位开源（Z-Localization）摘要与对照
+- [`docs/ustc_robowalker_2025.md`](docs/ustc_robowalker_2025.md)：中科大 RoboWalker 哨兵 2025 技术报告摘要（Batch-LIWO / ROG-Map / Minco+ESDF / SE2 MPC）
+- [`docs/wheel_odometry.md`](docs/wheel_odometry.md)：外置轮式里程计（接线、帧格式、2 s 清零、精度实测）与 `wheel_odom_fusion` 置信度门控融合
 - [`docs/pitfalls.md`](docs/pitfalls.md)：踩坑记录（转向符号、速度环死区、IMU QoS）
 - [`docs/boot-fix.md`](docs/boot-fix.md)：MID360 插入时 Jetson 开机卡住的修复
 - [`ros_ws/README.md`](ros_ws/README.md)：ROS 功能包职责、低内存构建、MID360 网络

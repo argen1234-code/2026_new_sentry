@@ -40,6 +40,21 @@ def generate_launch_description():
     log_level = LaunchConfiguration("log_level")
     start_terrain = LaunchConfiguration("start_terrain")
     start_tf_helpers = LaunchConfiguration("start_tf_helpers")
+    use_wheel_fusion = LaunchConfiguration("use_wheel_fusion")
+
+    # odom -> base_footprint 只能有一个发布者：融合节点与 sensor_scan_generation 互斥。
+    wheel_fusion_condition = IfCondition(PythonExpression(
+        ["'", start_tf_helpers, "'.lower() == 'true' and '",
+         use_wheel_fusion, "'.lower() == 'true'"]))
+    legacy_tf_condition = IfCondition(PythonExpression(
+        ["'", start_tf_helpers, "'.lower() == 'true' and '",
+         use_wheel_fusion, "'.lower() != 'true'"]))
+    # Humble 的 LoadComposableNodes 不评估 ComposableNode 自带的 condition
+    # （execute 把所有描述直接转成加载请求），互斥条件必须挂在动作上。
+    legacy_tf_composable_condition = IfCondition(PythonExpression(
+        ["'", use_composition, "'.lower() == 'true' and '",
+         start_tf_helpers, "'.lower() == 'true' and '",
+         use_wheel_fusion, "'.lower() != 'true'"]))
 
     lifecycle_nodes = [
         "controller_server",
@@ -134,6 +149,16 @@ def generate_launch_description():
         ),
     )
 
+    declare_use_wheel_fusion_cmd = DeclareLaunchArgument(
+        "use_wheel_fusion",
+        default_value="false",
+        description=(
+            "Replace sensor_scan_generation with wheel_odom_fusion, which "
+            "publishes odom->base_footprint at the wheel rate (50 Hz) using "
+            "wheel prediction and LIO correction. Requires /wheel_odom."
+        ),
+    )
+
     start_terrain_analysis_cmd = Node(
         package="terrain_analysis",
         executable="terrainAnalysis",
@@ -156,6 +181,18 @@ def generate_launch_description():
         arguments=["--ros-args", "--log-level", log_level],
         parameters=[configured_params],
         condition=IfCondition(start_terrain),
+    )
+
+    start_wheel_fusion_cmd = Node(
+        package="wheel_odom_fusion",
+        executable="wheel_odom_fusion_node",
+        name="wheel_odom_fusion",
+        output="screen",
+        respawn=use_respawn,
+        respawn_delay=2.0,
+        parameters=[configured_params],
+        arguments=["--ros-args", "--log-level", log_level],
+        condition=wheel_fusion_condition,
     )
 
     load_nodes = GroupAction(
@@ -181,7 +218,7 @@ def generate_launch_description():
                 respawn_delay=2.0,
                 parameters=[configured_params],
                 arguments=["--ros-args", "--log-level", log_level],
-                condition=IfCondition(start_tf_helpers),
+                condition=legacy_tf_condition,
             ),
             Node(
                 package="fake_vel_transform",
@@ -298,13 +335,6 @@ def generate_launch_description():
                 condition=IfCondition(start_tf_helpers),
             ),
             ComposableNode(
-                package="sensor_scan_generation",
-                plugin="sensor_scan_generation::SensorScanGenerationNode",
-                name="sensor_scan_generation",
-                parameters=[configured_params],
-                condition=IfCondition(start_tf_helpers),
-            ),
-            ComposableNode(
                 package="fake_vel_transform",
                 plugin="fake_vel_transform::FakeVelTransform",
                 name="fake_vel_transform",
@@ -375,6 +405,20 @@ def generate_launch_description():
         ],
     )
 
+    # sensor_scan_generation 单独加载，把互斥条件放在动作级别上。
+    load_legacy_tf_composable = LoadComposableNodes(
+        condition=legacy_tf_composable_condition,
+        target_container=container_name_full,
+        composable_node_descriptions=[
+            ComposableNode(
+                package="sensor_scan_generation",
+                plugin="sensor_scan_generation::SensorScanGenerationNode",
+                name="sensor_scan_generation",
+                parameters=[configured_params],
+            ),
+        ],
+    )
+
     # Create the launch description and populate
     ld = LaunchDescription()
 
@@ -393,10 +437,13 @@ def generate_launch_description():
     ld.add_action(declare_log_level_cmd)
     ld.add_action(declare_start_terrain_cmd)
     ld.add_action(declare_start_tf_helpers_cmd)
+    ld.add_action(declare_use_wheel_fusion_cmd)
     # Add the actions to launch all of the navigation nodes
     ld.add_action(start_terrain_analysis_cmd)
     ld.add_action(start_terrain_analysis_ext_cmd)
+    ld.add_action(start_wheel_fusion_cmd)
     ld.add_action(load_nodes)
     ld.add_action(load_composable_nodes)
+    ld.add_action(load_legacy_tf_composable)
 
     return ld

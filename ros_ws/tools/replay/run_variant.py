@@ -255,8 +255,17 @@ def run_one(name, variant, args, out_root):
     ]
     for key in ("x", "y", "z", "yaw"):
         val = getattr(args, f"map_odom_{key}", None)
+        if val is None:
+            # A scenario knows where its own world sits in the map (it was
+            # recorded with a specific map->odom); the launch defaults belong to
+            # corridor_1025_tape and would misplace every other world.
+            val = (args.scenario_data.get("map_odom") or {}).get(key)
         if val is not None:
             launch_args.append(f"map_odom_{key}:={val}")
+    init = args.scenario_data.get("init") or {}
+    for key in ("x", "y", "yaw"):
+        if key in init:
+            launch_args.append(f"init_{key}:={init[key]}")
     launch = spawn(launch_args, tag("launch.log"))
 
     preroll = spawn([
@@ -349,7 +358,8 @@ def main():
     ap.add_argument("--bag", default=None)
     ap.add_argument("--plant", default="measured", choices=["measured", "ideal"])
     ap.add_argument("--no-crop", dest="crop", action="store_false")
-    ap.add_argument("--map", default=os.path.join(REPO, "maps", "corridor_1025_tape.yaml"))
+    ap.add_argument("--map", default=None,
+                    help="costmap yaml; defaults to the scenario's own 'map' key")
     ap.add_argument("--out", default="/tmp/replay/results")
     ap.add_argument("--rate", type=float, default=1.0)
     ap.add_argument("--goal-timeout", type=float, default=200.0)
@@ -380,6 +390,9 @@ def main():
     scenario_path = args.scenario if os.path.isabs(args.scenario) \
         else os.path.join(HERE, args.scenario)
     scenario = json.load(open(scenario_path))
+    args.scenario_data = scenario
+    if args.map is None:
+        args.map = os.path.join(REPO, "maps", scenario.get("map", "corridor_1025_tape.yaml"))
     if args.bag is None:
         args.bag = scenario["bag"]
     args.goals = scenario["goals"]

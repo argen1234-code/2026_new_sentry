@@ -33,11 +33,14 @@ void BackUpFreeSpace::onConfigure()
   nav2_util::declare_parameter_if_not_declared(
     node, "service_name", rclcpp::ParameterValue("local_costmap/get_costmap"));
   nav2_util::declare_parameter_if_not_declared(node, "visualize", rclcpp::ParameterValue(false));
+  nav2_util::declare_parameter_if_not_declared(
+    node, "escape_start_dist", rclcpp::ParameterValue(0.30));
 
   node->get_parameter("global_frame", global_frame_);
   node->get_parameter("max_radius", max_radius_);
   node->get_parameter("service_name", service_name_);
   node->get_parameter("visualize", visualize_);
+  node->get_parameter("escape_start_dist", escape_start_dist_);
 
   costmap_client_ = node->create_client<nav2_msgs::srv::GetCostmap>(service_name_);
 
@@ -92,7 +95,8 @@ nav2_behaviors::Status BackUpFreeSpace::onRun(
   pose.theta = tf2::getYaw(initial_pose_.pose.orientation);
 
   // Find the best direction to back up
-  float best_angle = findBestDirection(costmap, pose, -M_PI, M_PI, max_radius_, M_PI / 32.0);
+  best_angle_ = findBestDirection(costmap, pose, -M_PI, M_PI, max_radius_, M_PI / 32.0);
+  const float best_angle = best_angle_;
 
   // Calculate move command
   twist_x_ = std::cos(best_angle) * command->speed;
@@ -153,7 +157,7 @@ nav2_behaviors::Status BackUpFreeSpace::onCycleUpdate()
   pose.y = current_pose.pose.position.y;
   pose.theta = tf2::getYaw(current_pose.pose.orientation);
 
-  if (!isCollisionFree(distance, cmd_vel.get(), pose)) {
+  if (!isCollisionFreeBeyond(distance, pose)) {
     stopRobot();
     RCLCPP_WARN(logger_, "Collision Ahead - Exiting DriveOnHeading");
     return nav2_behaviors::Status::FAILED;
@@ -176,6 +180,11 @@ float BackUpFreeSpace::findBestDirection(
   float final_safe_angle = 0.0f;
   float final_unsafe_angle = 0.0f;
 
+  // 没有任何完整安全扇区时的兜底：取"能走最远"的方向
+  float best_clear_angle = 0.0f;
+  float best_clear_dist = 0.0f;
+  bool found_sector = false;
+
   float resolution = costmap.metadata.resolution;
   float origin_x = costmap.metadata.origin.position.x;
   float origin_y = costmap.metadata.origin.position.y;
@@ -189,8 +198,10 @@ float BackUpFreeSpace::findBestDirection(
 
   for (float angle = start_angle; angle <= end_angle; angle += angle_increment) {
     bool is_safe = true;
+    float clear_dist = 0.0f;
 
-    for (float r = 0; r <= radius; r += resolution) {
+    // 从 escape_start_dist 起采样：车心自己就在 253 内切圈里，从 r=0 起必然全方向失败
+    for (float r = static_cast<float>(escape_start_dist_); r <= radius; r += resolution) {
       float x = pose.x + r * std::cos(angle);
       float y = pose.y + r * std::sin(angle);
 
@@ -211,6 +222,14 @@ float BackUpFreeSpace::findBestDirection(
         is_safe = false;
         break;
       }
+      clear_dist = r;
+    }
+    if (is_safe) {
+      clear_dist = radius;
+    }
+    if (clear_dist > best_clear_dist) {
+      best_clear_dist = clear_dist;
+      best_clear_angle = angle;
     }
     if (is_safe && first_safe_angle == -1.0f) {
       first_safe_angle = angle;
@@ -227,15 +246,54 @@ float BackUpFreeSpace::findBestDirection(
       final_unsafe_angle = last_unsafe_angle;
       first_safe_angle = -1.0f;
       last_unsafe_angle = -1.0f;
+      found_sector = true;
     }
   }
   best_angle = (final_safe_angle + final_unsafe_angle) / 2.0f;
+
+  // 没有完整安全扇区时，退而求其次选"能走最远"的方向；
+  // 原实现会回落到 0.0（= +x 方向），撞上障碍后往往正是被堵的那一侧。
+  if (!found_sector && best_clear_dist > 0.0f) {
+    best_angle = best_clear_angle;
+  }
 
   if (visualize_) {
     visualize(pose, radius, final_safe_angle, final_unsafe_angle);
   }
 
   return best_angle;
+}
+
+bool BackUpFreeSpace::isCollisionFreeBeyond(
+  double distance, const geometry_msgs::msg::Pose2D & pose)
+{
+  const double travel_left = std::fabs(command_x_) - distance;
+  const double speed = std::hypot(twist_x_, twist_y_);
+  if (speed < 1e-6) {
+    return true;
+  }
+
+  // 只检查贴身段之外：车已经贴着障碍，贴身段本身不可能"无碰撞"
+  const double check_to = std::min(
+    travel_left, escape_start_dist_ + simulate_ahead_time_ * speed);
+  if (check_to <= escape_start_dist_) {
+    return true;
+  }
+
+  const double res = 0.05;
+  bool fetch_data = true;
+  for (double s = escape_start_dist_; s <= check_to; s += res) {
+    geometry_msgs::msg::Pose2D probe;
+    probe.x = pose.x + s * std::cos(best_angle_);
+    probe.y = pose.y + s * std::sin(best_angle_);
+    probe.theta = pose.theta;
+
+    if (!collision_checker_->isCollisionFree(probe, fetch_data)) {
+      return false;
+    }
+    fetch_data = false;
+  }
+  return true;
 }
 
 std::vector<geometry_msgs::msg::Point> BackUpFreeSpace::gatherFreePoints(

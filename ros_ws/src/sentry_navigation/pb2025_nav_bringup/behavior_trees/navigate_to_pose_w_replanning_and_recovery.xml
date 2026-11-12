@@ -33,7 +33,6 @@
                                 service_name="global_costmap/clear_entirely_global_costmap"/>
             <Wait wait_duration="1.0"/>
           </Sequence>
-          <Spin spin_dist="1.57"/>
           <BackUp backup_dist="1.0" backup_speed="1.0"/>
         </RoundRobin>
       </ReactiveFallback>

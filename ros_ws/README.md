@@ -53,6 +53,7 @@ scripts/
 | `terrain_analysis`、`terrain_analysis_ext` | 地形与障碍物分析 |
 | `pointcloud_to_laserscan` | 点云转激光 |
 | `sensor_scan_generation`、`loam_interface` | 坐标变换与里程计接口 |
+| `wheel_odom_fusion` | 轮式 50 Hz 预测 + LIO 校正发布 `odom→base_footprint`，带置信度门控（`use_wheel_fusion:=true`） |
 | `pb2025_nav_bringup` | Nav2 启动、参数、行为树、地图 |
 | `pb_nav2_plugins`、`pb_omni_pid_pursuit_controller` | 自定义 Nav2 插件与控制器 |
 | `pb_teleop_twist_joy`、`fake_vel_transform` | 遥控与速度变换 |

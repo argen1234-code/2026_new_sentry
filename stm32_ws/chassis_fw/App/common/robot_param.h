@@ -192,6 +192,21 @@ extern "C" {
 #define REF_PROTOCOL_FRAME_MAX_SIZE        192   // 裁判系统最大帧长
 #endif
 
+/* ------------------------- 外置里程计（UART7） ------------------------- */
+#define ODOM_UART_BAUD                     921600U      // 里程计串口波特率
+#define ODOM_RX_BUF_LEN                    112U         // 接收缓冲，4 帧整数倍
+#define ODOM_FRAME_LEN                     28U          // 单帧长度，单位 字节
+#define ODOM_TIMEOUT_MS                    50U          // 帧超时，单位 ms
+#define ODOM_MOUNT_OFFSET_X_MM             14.5f        // 安装点相对车体中心 X 偏置，单位 mm
+#define ODOM_MOUNT_OFFSET_Y_MM             0.0f         // 安装点相对车体中心 Y 偏置，单位 mm
+#define ODOM_MM_TO_M                       0.001f       // 毫米转米
+#define ODOM_DEG_TO_RAD                    0.01745329252f // 度转弧度
+#define ODOM_ZERO_WAIT_MS                  2000U        // 首帧后连续收数满足该时长再清零，单位 ms
+#define ODOM_ZERO_SETTLE_MS                100U         // 清零帧下发后的数据稳定等待，单位 ms
+#define ODOM_ZERO_RETRY_MS                 1000U        // 未使用：实际重试间隔由 ODOM_ZERO_SETTLE_MS 决定
+#define ODOM_ZERO_MAX_RETRY                3U           // 清零最大重试次数
+#define ODOM_STATE_LEN                     36U          // 0x85 上行负载长度，单位 字节
+
 /* ========================= CAN 电机 ID 配置 ========================= */
 /* MIT 电机 CAN ID：命令 ID 为 1~4，反馈 ID 为 0x51~0x54 */
 #define DM_STRUM_CAN_ID                     0X01

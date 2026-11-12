@@ -8,14 +8,17 @@
 1. **2D 栅格的职责只有两个**：代价地图静态层、全局规划参考。它回答「哪里有墙」，不回答「我在哪」，也不能用来评判定位精度。
 2. **重定位不能完全交给轮式里程计**。里程计是相对量，开机时不知道自己在场地哪里，必须有一个锚把它固定到地图上。
 3. **锚用 GICP 对 3D 先验**（现状），不换成 2D 匹配。原因是输入太弱（见 §6）。
-4. **未来加入 2 轮 + IMU 融合里程计后，只替换 `odom→base_footprint` 这一段**，`map→odom` 仍由 GICP 提供。分工不变，只是 GICP 需要修正的残差变小。
+4. **加入轮式里程计后只替换 `odom→base_footprint` 这一段**，`map→odom` 仍由 GICP 提供。
+   分工不变，只是 GICP 需要修正的残差变小。**2026-11-12 已实施**：`wheel_odom_fusion`
+   （轮式 50 Hz 预测 + LIO 20 Hz 校正），默认关闭，`use_wheel_fusion:=true` 开启，
+   详见 [`wheel_odometry.md` §10](wheel_odometry.md)。
 5. **不启用 `use_scan_matching` / `do_loop_closing`**，现在不启用，传感器到位后更不该启用。
 
 ## 2. 角色分工
 
 | 对象 | 回答的问题 | 唯一来源 | 说明 |
 |---|---|---|---|
-| `odom→base_footprint` | 相对运动 | Point-LIO（现状）/ 轮式+IMU 里程计（未来） | 高频，局部无漂移或小漂移 |
+| `odom→base_footprint` | 相对运动 | Point-LIO（默认）/ `wheel_odom_fusion`（`use_wheel_fusion:=true`） | 高频，局部无漂移或小漂移 |
 | `map→odom` | 我在地图的哪里 | `small_gicp_relocalization` | 2 Hz，对 3D 先验做配准 |
 | 2D 栅格 `/map` | 哪里有墙 | `slam_toolbox`（建图）/ `map_server`（导航） | 只做代价地图静态层与全局规划 |
 | 漂移量 | 我错了几厘米 | 回环回归测试 / 外部真值 | **栅格测不出来** |

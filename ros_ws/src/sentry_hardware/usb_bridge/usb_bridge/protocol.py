@@ -18,6 +18,7 @@ ID_MCU_STATE = 0x81
 ID_MCU_HEARTBEAT = 0x82
 ID_WHEEL_STATE = 0x83
 ID_IMU_STATE = 0x84
+ID_ODOM_STATE = 0x85
 
 # Keep these layouts in sync with
 # stm32_ws/legacy/Component/Communication/Src/communication_usb.h.
@@ -26,18 +27,22 @@ MCU_STATE_FMT = '<I8fBBH'
 MCU_HEARTBEAT_FMT = '<IBBH'
 WHEEL_STATE_FMT = '<IBBHH4f4f4B4B4h'
 IMU_STATE_FMT = '<I3f3ff4fiBBI'
+# u32 ts, f32 x/y/yaw/gyro/vx/vy, u32 odom_seq, u16 age_ms, u8 valid, u8 rsv
+ODOM_STATE_FMT = '<I6fIHBB'
 
 UNIFIED_CMD_LEN = struct.calcsize(UNIFIED_CMD_FMT)
 MCU_STATE_LEN = struct.calcsize(MCU_STATE_FMT)
 MCU_HEARTBEAT_LEN = struct.calcsize(MCU_HEARTBEAT_FMT)
 WHEEL_STATE_LEN = struct.calcsize(WHEEL_STATE_FMT)
 IMU_STATE_LEN = struct.calcsize(IMU_STATE_FMT)
+ODOM_STATE_LEN = struct.calcsize(ODOM_STATE_FMT)
 
 assert UNIFIED_CMD_LEN == 45
 assert MCU_STATE_LEN == 40
 assert MCU_HEARTBEAT_LEN == 8
 assert WHEEL_STATE_LEN == 58
 assert IMU_STATE_LEN == 58
+assert ODOM_STATE_LEN == 36
 
 # UnifiedCmd chassis_status bits (must match communication_usb.h).
 CMD_VALID = 0x0001
@@ -160,6 +165,24 @@ def decode_imu_state(payload):
         'imu_status': values[12],
         'valid_mask': values[13],
         'last_ok_ms': values[15],
+    }
+
+
+def decode_odom_state(payload):
+    if len(payload) != ODOM_STATE_LEN:
+        raise ValueError(f'odom state length {len(payload)} != {ODOM_STATE_LEN}')
+    values = struct.unpack(ODOM_STATE_FMT, payload)
+    return {
+        'mcu_ts_ms': values[0],
+        'x_m': values[1],
+        'y_m': values[2],
+        'yaw_rad': values[3],
+        'gyro_rad_s': values[4],
+        'vx_mps': values[5],
+        'vy_mps': values[6],
+        'odom_seq': values[7],
+        'age_ms': values[8],
+        'valid': bool(values[9]),
     }
 
 

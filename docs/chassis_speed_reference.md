@@ -81,7 +81,7 @@ python3 scripts/chassis_keyboard_teleop.py --vx 0.40 --vy 0.40 --wz 0.80
 | 链路 | 路径 | 平移补偿 |
 |---|---|---|
 | 键盘直控 | 脚本 → USB CDC → 固件 | **无** `frame_yaw` 补偿 |
-| ROS 导航 | `/cmd_vel` → `cmd_vel_to_unified` → USB → 固件 | `frame_yaw = -45°`（见 `cmd_vel_to_unified.py`） |
+| ROS 导航 | `/cmd_vel` → `cmd_vel_to_unified` → USB → 固件 | `frame_yaw = -135°`（`-2.356194` rad，见 `cmd_vel_to_unified.py`） |
 
 因此：
 

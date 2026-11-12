@@ -84,6 +84,16 @@ protected:
     const nav2_msgs::msg::Costmap & costmap, geometry_msgs::msg::Pose2D pose, float start_angle,
     float end_angle, float radius, float angle_increment);
 
+  /**
+   * @brief 沿已选方向检查"走出贴身段之后"的碰撞。
+   *
+   * 基类 DriveOnHeading::isCollisionFree() 的 cycle_count 从 0 起，第一帧检查的就是当前位姿；
+   * 车已经贴住障碍时必然返回碰撞，恢复行为永远失败。这里跳过 escape_start_dist 以内的贴身段，
+   * 并沿 best_angle_ 投影（全向底盘的逃逸方向不一定是车头朝向）。
+   */
+  bool isCollisionFreeBeyond(
+    double distance, const geometry_msgs::msg::Pose2D & pose);
+
   void visualize(
     geometry_msgs::msg::Pose2D pose, float radius, float first_safe_angle, float last_unsafe_angle);
 
@@ -91,11 +101,13 @@ protected:
   std::shared_ptr<rclcpp_lifecycle::LifecyclePublisher<visualization_msgs::msg::MarkerArray>>
     marker_pub_;
   double twist_x_, twist_y_;
+  float best_angle_{0.0f};
 
   // parameters
   std::string service_name_;
   double max_radius_;
   bool visualize_;
+  double escape_start_dist_;
 };
 
 }  // namespace pb_nav2_behaviors

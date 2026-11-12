@@ -16,3 +16,11 @@ usb_bridge:
     # 2*pi/19.2032 = 0.3272 rad instead of 2*pi.
     wheel_position_wrap_rad: 0.3272
     wheel_joint_signs: [-1.0, 1.0, 1.0, -1.0]
+    # 外置里程计（0x85）。frame_yaw 暂沿用 cmd_vel_to_unified 的底盘安装角，
+    # 真机标定后再回填；publish_tf 默认关闭，只在标定启动里打开，避免与
+    # sensor_scan_generation 的 odom->base_footprint 抢同一个子帧。
+    wheel_odom_frame_yaw_deg: -135.0
+    wheel_odom_scale: 1.0
+    wheel_odom_publish_tf: false
+    odom_wheel_frame: odom_wheel
+    odom_base_frame: base_footprint

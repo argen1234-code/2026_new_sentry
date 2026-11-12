@@ -125,6 +125,14 @@ def generate_launch_description():
             default_value="rviz",
             description="Visualization backend: rviz, foxglove, or headless",
         ),
+        DeclareLaunchArgument(
+            "use_wheel_fusion",
+            default_value="false",
+            description=(
+                "Publish odom->base_footprint from wheel_odom_fusion (50 Hz wheel "
+                "prediction + LIO correction) instead of sensor_scan_generation"
+            ),
+        ),
         # Kept for compatibility with the previous entry point. Set
         # visualization:=headless or visualization:=foxglove for other modes.
         DeclareLaunchArgument("use_rviz", default_value="true"),
@@ -181,6 +189,7 @@ def generate_launch_description():
             "params_file": resolved_params, "use_sim_time": use_sim_time,
             "autostart": autostart, "use_composition": "True",
             "container_name": "nav2_container",
+            "use_wheel_fusion": LaunchConfiguration("use_wheel_fusion"),
         }),
         include("pb2025_nav_bringup", "joy_teleop_launch.py", {
             "joy_config_file": resolved_params, "use_sim_time": use_sim_time,

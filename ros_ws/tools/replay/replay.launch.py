@@ -60,7 +60,7 @@ def generate_launch_description():
         DeclareLaunchArgument("crop", default_value="true"),
         DeclareLaunchArgument("local_radius", default_value="6.0"),
         DeclareLaunchArgument("ext_radius", default_value="12.0"),
-        DeclareLaunchArgument("chassis_model", default_value="omni_round"),
+        DeclareLaunchArgument("chassis_model", default_value="test_chassis"),
         DeclareLaunchArgument("rviz", default_value="false"),
     ]
 

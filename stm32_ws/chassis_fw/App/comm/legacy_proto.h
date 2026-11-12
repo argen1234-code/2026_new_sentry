@@ -32,12 +32,14 @@ extern "C" {
 #define LEGACY_ID_MCU_HEARTBEAT           0x82u
 #define LEGACY_ID_WHEEL_STATE             0x83u
 #define LEGACY_ID_IMU_STATE               0x84u
+#define LEGACY_ID_ODOM_STATE              0x85u
 
 #define LEGACY_UNIFIED_CMD_LEN            45u
 #define LEGACY_MCU_STATE_LEN              40u
 #define LEGACY_MCU_HEARTBEAT_LEN          8u
 #define LEGACY_WHEEL_STATE_LEN            58u
 #define LEGACY_IMU_STATE_LEN              58u
+#define LEGACY_ODOM_STATE_LEN             36u
 
 /* UnifiedCmd.chassis_status 位定义 */
 #define LEGACY_CMD_VALID                  0x0001u

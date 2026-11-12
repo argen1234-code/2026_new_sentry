@@ -17,6 +17,7 @@
 #include "usb_device.h"
 
 #include "bsp_fdcan.h"
+#include "bsp_odom_uart.h"
 #include "legacy_bridge.h"
 #include "usb_cdc_port.h"
 
@@ -42,6 +43,7 @@ int main(void)
   legacy_bridge_init();
   usb_cdc_port_init();
   bsp_can_init();
+  bsp_odom_uart_init();
 
   osKernelInitialize();
   MX_FREERTOS_Init();

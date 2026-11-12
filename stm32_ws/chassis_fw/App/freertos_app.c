@@ -9,6 +9,7 @@
 #include "FreeRTOS.h"
 #include "cmsis_os2.h"
 
+#include "bsp_odom_uart.h"
 #include "chassis_task.h"
 #include "legacy_bridge.h"
 #include "usb_cdc_port.h"
@@ -36,6 +37,7 @@ static void comm_task(void *argument)
     for (;;)
     {
         usb_cdc_port_poll_rx();
+        bsp_odom_uart_tick();
         legacy_bridge_tick();
         osDelay(1);
     }

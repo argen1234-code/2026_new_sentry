@@ -1,0 +1,18 @@
+{
+  "_comment": "World for the 2026-11-12 out-and-back, taken from ~/bags/repro_1102_2008 (Nov 2, corridor_1102, /terrain_map covers x -1.2..7.0, obstacle points sit 0.05 m median from the prior map's occupied cells). The bag that actually ran the route (~/bags/tune_1947) records no terrain cloud, so only its goals, plant and metrics are reused. Recorded run: goal1 at t+6.7 s -> SUCCESS t+27.0, goal2 at t+29.2 -> SUCCESS t+53.2; replay fires them at t=8 and t=32 so the sim has the same dwell before each leg.",
+  "bag": "/home/gzu-prink/bags/repro_1102_2008",
+  "map": "corridor_1102.yaml",
+  "map_odom": {"x": -0.432, "y": -0.031, "z": -0.052, "yaw": 0.0181},
+  "init": {"x": 0.4325, "y": 0.0232, "yaw": -0.0181},
+  "goals": [
+    {"t": 8.0, "x": 6.136, "y": 0.154, "yaw": 0.103},
+    {"t": 32.0, "x": 0.193, "y": 0.076, "yaw": 3.091}
+  ],
+  "real_run": {
+    "bag": "/home/gzu-prink/bags/tune_1947",
+    "legs": [
+      {"label": "出 6.14 m", "start_t": 6.7, "end_t": 27.0, "status": "SUCCEEDED"},
+      {"label": "回起点", "start_t": 29.2, "end_t": 53.2, "status": "SUCCEEDED"}
+    ]
+  }
+}

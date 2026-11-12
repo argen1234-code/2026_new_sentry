@@ -55,7 +55,7 @@ sentry_bringup          launch / 系统组合 / 参数装载
 sentry_decision         行为状态机、战术决策、模式切换
       |
 sentry_perception       点云地形分析、点云转激光、扫描生成
-sentry_localization     Point-LIO、重定位、坐标变换
+sentry_localization     Point-LIO、重定位、坐标变换、轮式融合（wheel_odom_fusion）
 sentry_navigation       Nav2 插件、控制器、行为树、代价地图
       |
 sentry_hardware         雷达、串口桥、USB 桥、底盘 UDP 指令

@@ -434,3 +434,78 @@
 - **验证方式**：台架上 `max_velocity` 设 1.5 与 2.0，移动中位速应严格按比例变化（说明无饱和）；
   真车上同样改，`/odometry` 的速度会撞到一个平台。
 - **日期**：2026-10-30
+
+## 27. OpenOCD 报 `CMSIS-DAP command CMD_INFO failed`，探针不响应
+
+- **现象**：`lsusb` 能看到 `faed:4870 Horco CMSIS-DAP`，但 OpenOCD 一连就失败：
+  v2 后端报 `CMD_INFO failed`，强制 HID 后端报 `error writing data: Connection timed out`。
+  换速度、显式 `transport select swd`、重试多次均无效。
+- **根因**：探针自身固件挂死（`CMD_INFO` 是探针级命令，与目标板无关），USB 重新枚举即可。
+- **修正**：**拔插调试器**（USB 重新上电）后即恢复；
+  之后 `Info : SWD DPIDR 0x6ba02477`、`Cortex-M7 r1p2 detected` 正常。
+- **涉及文件**：无（工具链）
+- **验证方式**：拔插后 `openocd ... -c "init; shutdown"` 能打印 `Examination succeed`。
+- **日期**：2026-11-12
+
+## 28. OpenOCD 的 `mdw` 在本机版本不打印输出；`puts` 语法也不同
+
+- **现象**：`init; reset halt; mdw 0x24000000 17` 没有任何输出，也不报错；
+  `puts SNAP [read_memory ...]` 报 `invalid command name "SNAP"`；
+  `echo SNAP1 [read_memory ...]` 报 `echo [-n] string`。
+- **根因**：该 xpack OpenOCD 0.12 的 Tcl 兼容层里 `puts` 是 `puts channel string` 形式，
+  `echo` 只接受单个字符串参数；`mdw` 在此构建下不产生可见回显。
+- **修正**：用 `read_memory` + `puts stdout`：
+
+  ```bash
+  openocd -f interface/cmsis-dap.cfg -f target/stm32h7x.cfg \
+    -c "init; reset halt; resume; sleep 1000; halt; \
+        puts stdout \"SNAP [read_memory 0x24000000 32 17]\"; resume; shutdown"
+  ```
+
+  另注意：地址要带 `0x`（裸数字按十进制解析）；读计数时命令里**不要带 `reset`**，
+  否则 RAM 被重新初始化、计数清零。`reset halt` 后 RAM 内容不被清除，重启后要等
+  `bsp_odom_uart_init()` 清零再读。
+- **涉及文件**：无（工具链）
+- **验证方式**：命令能打印 `SNAP 0x4f444f4d ...`。
+- **日期**：2026-11-12
+
+## 29. H7 的 DMA 访问不到 DTCM：串口 DMA 缓冲必须放 RAM_D1
+
+- **现象**：UART7 的 DMA 接收缓冲若按普通全局变量声明，会随 `.bss` 落到 DTCM
+  （`0x20000000`），DMA 收不到数据或数据不动。
+- **根因**：STM32H7 的 DTCM 不挂在 AHB 矩阵上，DMA 无法访问；而
+  `STM32H723VGTx_FLASH.ld` 把 `.data/.bss` 都放在 DTCMRAM。
+- **修正**：新增 `.odom_dma (NOLOAD)` 段映射到 `RAM_D1 (0x24000000)`，
+  缓冲与调试结构用 `__attribute__((section(".odom_dma"), aligned(32)))`；
+  NOLOAD 段不会被启动代码清零，必须在 `init` 里手动清零。
+  本工程未开 D-Cache（全树无 `SCB_EnableDCache`），所以不需要 `SCB_InvalidateDCache_by_Addr`。
+- **涉及文件**：`stm32_ws/chassis_fw/STM32H723VGTx_FLASH.ld`、
+  `stm32_ws/chassis_fw/App/bsp/bsp_odom_uart.c`
+- **验证方式**：`arm-none-eabi-nm -S build/chassis_fw.elf | grep g_odom_dbg` 地址为
+  `0x24xxxxxx`；OpenOCD 读到的 `rx_bytes` 持续增长。
+- **日期**：2026-11-12
+
+## 30. `LoadComposableNodes` 不评估 `ComposableNode` 自带的 condition
+
+- **现象**：`navigation_launch.py` 里给 `sensor_scan_generation` 的 `ComposableNode` 加了
+  `IfCondition(use_wheel_fusion 为 false)`，但 `use_wheel_fusion:=true` 时它仍被加载，
+  与 `wheel_odom_fusion` 同时发布 `odom→base_footprint`（TF 双发布者，位姿来回抽搐）。
+- **根因**：Humble 的 `launch_ros.actions.LoadComposableNodes.execute()` 把
+  `composable_node_descriptions` 直接转成加载请求，**从不读 `description.condition`**
+  （已用 `inspect.getsource` 核实）。写在描述上的条件等于死代码。
+- **修正**：条件必须挂在**动作**上——另建一个带 `condition=` 的 `LoadComposableNodes`，
+  里面只放这一个组件；非组合分支用 `Node(condition=...)`。
+- **涉及文件**：`ros_ws/src/sentry_navigation/pb2025_nav_bringup/launch/navigation_launch.py`
+- **验证方式**：`use_composition` × `use_wheel_fusion` 四种组合逐一启动，
+  `ros2 node list` 与 `ros2 topic info /odometry -v` 确认只有一个 `odom→base_footprint` 发布者。
+- **日期**：2026-11-12
+
+## 31. `ros2 bag play --topics` 会把 bag 路径当话题名吃掉
+
+- **现象**：`ros2 bag play --topics /tf_static /wheel_odom /lidar_odometry <bag>` 报
+  `the following arguments are required: bag_path`，回放根本没开始。
+- **根因**：Humble 的 `--topics` 是 `nargs='+'`，位置参数必须写在它前面。
+- **修正**：`ros2 bag play <bag> --topics /tf_static /wheel_odom /lidar_odometry`。
+- **涉及文件**：无（工具链）
+- **验证方式**：命令能正常回放并打印 `Opened database ... READ_ONLY`。
+- **日期**：2026-11-12

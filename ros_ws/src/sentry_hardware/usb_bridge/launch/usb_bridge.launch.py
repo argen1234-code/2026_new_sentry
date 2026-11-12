@@ -15,12 +15,17 @@ def generate_launch_description():
         DeclareLaunchArgument('enable_motion', default_value='false',
                               description='Allow /cmd_vel to drive the chassis'),
         DeclareLaunchArgument('cmd_vel_topic', default_value='/cmd_vel'),
+        DeclareLaunchArgument('odom_publish_tf', default_value='false',
+                              description='Publish odom_wheel -> base_footprint TF'),
         Node(
             package='usb_bridge',
             executable='usb_bridge',
             name='usb_bridge',
             output='screen',
-            parameters=[config],
+            parameters=[config, {
+                'wheel_odom_publish_tf': ParameterValue(
+                    LaunchConfiguration('odom_publish_tf'), value_type=bool),
+            }],
         ),
         Node(
             package='usb_bridge',
@@ -34,6 +39,10 @@ def generate_launch_description():
                 'max_vx': 1.2,
                 'max_vy': 0.6,
                 'max_wz': 1.3,
+                # 2026-11-12 实测（~/bags/wz_sweep_1725）：固件把自转放大
+                # 实际 = 1.70*wz + 0.0（wz 0.3->0.65，1.2->1.88 rad/s）。
+                # 这里压回 1/1.70；平移增益 1.08 未补偿。
+                'wz_gain': 0.80,
             }],
         ),
     ])

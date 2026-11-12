@@ -9,10 +9,13 @@ from usb_bridge.protocol import (
     IMU_STATE_LEN,
     MCU_STATE_LEN,
     UNIFIED_CMD_LEN,
+    ODOM_STATE_FMT,
+    ODOM_STATE_LEN,
     WHEEL_STATE_FMT,
     WHEEL_STATE_LEN,
     FrameParser,
     decode_imu_state,
+    decode_odom_state,
     decode_wheel_state,
     encode_frame,
 )
@@ -23,8 +26,10 @@ def test_lengths_are_stable():
     assert MCU_STATE_LEN == 40
     assert WHEEL_STATE_LEN == 58
     assert IMU_STATE_LEN == 58
+    assert ODOM_STATE_LEN == 36
     assert struct.calcsize(WHEEL_STATE_FMT) == 58
     assert struct.calcsize(IMU_STATE_FMT) == 58
+    assert struct.calcsize(ODOM_STATE_FMT) == 36
 
 
 def test_command_bits():
@@ -75,6 +80,39 @@ def test_decode_imu_state_roundtrip():
     assert state['quat_wxyz'] == pytest.approx([1.0, 0.0, 0.0, 0.0])
     assert state['valid_mask'] == 0x07
     assert state['last_ok_ms'] == 9999
+
+
+def test_decode_odom_state_roundtrip():
+    payload = struct.pack(
+        ODOM_STATE_FMT,
+        4321,
+        0.15, -0.20, 0.35, -0.05, 0.40, -0.10,
+        987654,
+        21,
+        1,
+        0,
+    )
+    state = decode_odom_state(payload)
+    assert state['mcu_ts_ms'] == 4321
+    assert state['x_m'] == pytest.approx(0.15)
+    assert state['y_m'] == pytest.approx(-0.20)
+    assert state['yaw_rad'] == pytest.approx(0.35)
+    assert state['gyro_rad_s'] == pytest.approx(-0.05)
+    assert state['vx_mps'] == pytest.approx(0.40)
+    assert state['vy_mps'] == pytest.approx(-0.10)
+    assert state['odom_seq'] == 987654
+    assert state['age_ms'] == 21
+    assert state['valid'] is True
+
+
+def test_parser_reads_odom_frame():
+    payload = bytes(ODOM_STATE_LEN)
+    frame = encode_frame(0x85, 9, payload)
+    parser = FrameParser()
+    frames = parser.feed(frame)
+    assert len(frames) == 1
+    assert frames[0].msg_id == 0x85
+    assert frames[0].seq == 9
 
 
 def test_parser_reads_wheel_frame():

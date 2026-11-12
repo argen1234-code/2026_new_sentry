@@ -177,7 +177,16 @@ SECTIONS
     . = ALIGN(8);
   } >DTCMRAM
 
-  
+  /* 里程计 DMA 缓冲与 OpenOCD 调试计数：DMA 不能访问 DTCM，放 RAM_D1 */
+  .odom_dma (NOLOAD) :
+  {
+    . = ALIGN(32);
+    KEEP(*(.odom_dma))
+    KEEP(*(.odom_dma*))
+    . = ALIGN(32);
+  } >RAM_D1
+
+
 
   /* Remove information from the standard libraries */
   /DISCARD/ :

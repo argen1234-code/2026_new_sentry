@@ -46,7 +46,8 @@ def main():
     ap.add_argument("--bag", default=None)
     ap.add_argument("--plant", default="measured", choices=["measured", "ideal"])
     ap.add_argument("--no-crop", dest="crop", action="store_false")
-    ap.add_argument("--map", default=os.path.join(rv.REPO, "maps", "corridor_1025_tape.yaml"))
+    ap.add_argument("--map", default=None,
+                    help="costmap yaml; defaults to the scenario's own 'map' key")
     ap.add_argument("--out", default="/tmp/replay/results")
     ap.add_argument("--tag", default="")
     ap.add_argument("--force", action="store_true")
@@ -63,6 +64,9 @@ def main():
     scenario_path = args.scenario if os.path.isabs(args.scenario) \
         else os.path.join(rv.HERE, args.scenario)
     scenario = json.load(open(scenario_path))
+    args.scenario_data = scenario
+    if args.map is None:
+        args.map = os.path.join(rv.REPO, "maps", scenario.get("map", "corridor_1025_tape.yaml"))
     if args.bag is None:
         args.bag = scenario["bag"]
     args.goals = scenario["goals"]
@@ -105,11 +109,12 @@ def main():
         if res is None and args.stop_on_fail:
             break
 
-    ref = scenario["reference_metrics"]
+    ref = scenario.get("reference_metrics")
     lines = ["| 变体 | 说明 | " + " | ".join(c[1] for c in COLS) + " |",
              "|---|---|" + "---|" * len(COLS)]
-    lines.append(f"| 实录基线 | {scenario['bag'].rsplit('/', 1)[-1]} | " +
-                 " | ".join(fmt(ref, c[0], c[2]) for c in COLS) + " |")
+    if ref:
+        lines.append(f"| 实录基线 | {scenario['bag'].rsplit('/', 1)[-1]} | " +
+                     " | ".join(fmt(ref, c[0], c[2]) for c in COLS) + " |")
     for name, res in zip(names, results):
         label = groups[name].get("label", "")
         lines.append(f"| {name} | {label} | " +
