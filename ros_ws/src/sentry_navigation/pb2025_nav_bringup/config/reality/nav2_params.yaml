@@ -183,6 +183,31 @@ small_gicp_relocalization:
     robot_base_frame: "gimbal_yaw"
     lidar_frame: "front_mid360"
     init_pose: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]   # [x, y, z, roll, pitch, yaw]
+    # ---- 配准验收（2026-11-13 可靠性调优）----
+    # 未通过验收的配准不更新 map->odom；连续拒绝进入 DEGRADED 并冻结 TF。
+    # 状态发布在 /diagnostics 的 localization/gicp 上。
+    min_inlier_ratio: 0.60          # 匹配点占比下限（正常跟踪）
+    # 恢复路径（大修正/重锚/全局重定位）必须用强门限：T2 实测中 inlier 0.61-0.72 的
+    # 错误匹配也能连续稳定，据此接受过 1.2 m/38° 的错误位姿。
+    min_inlier_ratio_recovery: 0.85
+    relocalize_min_inlier_gap: 0.10
+    max_correction_trans: 0.30      # 单次修正平移上限 m（2 Hz 下正常为毫米级）
+    max_correction_yaw: 0.20        # 单次修正偏航上限 rad
+    degraded_after_rejects: 6       # 连续拒绝次数（≈3 s）后进入 DEGRADED
+    reanchor_consistency_trans: 0.05   # 连续多次配准收敛到同一大修正时判为真实位移
+    reanchor_consistency_yaw: 0.03
+    reanchor_after_stable: 3           # 稳定次数达到后重新锚定（约 1.5 s）
+    # 大位移下修正会在 ±20 cm 内抖动，严格收敛永远凑不齐（T2c 实测）：
+    reanchor_relaxed_trans: 0.20       # 宽松重锚：连续多帧落在首个候选 ±20 cm
+    reanchor_relaxed_yaw: 0.05
+    reanchor_relaxed_after: 0          # 0 = 关闭宽松重锚（T2 证明它会接受错误匹配）
+    # 兜底全局重定位：DEGRADED 持续 10 s 后沿当前位姿做多初值 GICP 搜索
+    relocalize_after_s: 10.0
+    relocalize_grid_xy: 1.0
+    relocalize_grid_yaw: 0.5
+    relocalize_steps_xy: 5
+    relocalize_steps_yaw: 3
+    relocalize_min_agreement: 2
     # The prior_pcd_file does not need to be specified since it going to be set by defaults in launch.
     # prior_pcd_file: ""
 
@@ -692,6 +717,9 @@ wheel_odom_fusion:
     # 50 Hz 轮式下丢 10 帧即判超时；LIO 停 0.5 s 就停止发布，不让轮式无监督漂移。
     wheel_timeout_s: 0.2
     lio_timeout_s: 0.5
+    # LIO 短时断流时先用轮速外推保持发布，超过该上限才停发 TF（2026-11-13：曾因 LIO 停 16 s
+    # 直接停发 TF，导致 nav2 controller 心跳丢失、整栈被拆）。
+    lio_hold_s: 5.0
     wheel_buffer_s: 1.0
     max_wheel_linear_mps: 5.0
     max_wheel_angular_rps: 8.0

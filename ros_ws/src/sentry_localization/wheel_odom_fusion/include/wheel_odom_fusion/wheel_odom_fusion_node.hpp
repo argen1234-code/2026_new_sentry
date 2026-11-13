@@ -20,6 +20,7 @@
 #include <mutex>
 #include <string>
 
+#include "diagnostic_msgs/msg/diagnostic_array.hpp"
 #include "nav_msgs/msg/odometry.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "tf2_ros/buffer.h"
@@ -56,6 +57,7 @@ private:
   void wheelCallback(const nav_msgs::msg::Odometry::SharedPtr msg);
   void lioCallback(const nav_msgs::msg::Odometry::SharedPtr msg);
   void watchdogCallback();
+  void publishDiagnostics();
 
   bool ensureStatics();
   Pose2 interpolateWheel(const rclcpp::Time & stamp) const;
@@ -107,6 +109,14 @@ private:
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr lidar_sub_;
   rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odom_pub_;
   rclcpp::TimerBase::SharedPtr watchdog_timer_;
+  rclcpp::Publisher<diagnostic_msgs::msg::DiagnosticArray>::SharedPtr diag_pub_;
+  rclcpp::TimerBase::SharedPtr diag_timer_;
+
+  // 一致性上报（2026-11-13）：区分「轮速滑了」还是「LIO 漂了」。
+  double last_alpha_eff_{0.0};
+  double last_err_translation_{0.0};
+  double last_err_yaw_{0.0};
+  bool last_mismatch_{false};
 
   mutable std::mutex mutex_;
 
@@ -120,6 +130,9 @@ private:
   tf2::Transform latest_p_lio_;
   bool have_p_lio_{false};
   bool lio_stale_{false};
+  // LIO 短时断流时用轮速外推保持发布（默认 5 s），超过才停发（2026-11-13 可靠性调优）。
+  bool lio_hold_{false};
+  double lio_hold_s_{5.0};
   rclcpp::Time last_lio_rx_;
 
   // 轮式侧状态

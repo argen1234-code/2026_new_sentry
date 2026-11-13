@@ -48,6 +48,7 @@ WheelOdomFusionNode::WheelOdomFusionNode(const rclcpp::NodeOptions & options)
   snap_consecutive_ = declare_parameter<int>("snap_consecutive", 3);
   wheel_timeout_s_ = declare_parameter<double>("wheel_timeout_s", 0.2);
   lio_timeout_s_ = declare_parameter<double>("lio_timeout_s", 0.5);
+  lio_hold_s_ = declare_parameter<double>("lio_hold_s", 5.0);
   wheel_buffer_s_ = declare_parameter<double>("wheel_buffer_s", 1.0);
   max_wheel_linear_mps_ = declare_parameter<double>("max_wheel_linear_mps", 5.0);
   max_wheel_angular_rps_ = declare_parameter<double>("max_wheel_angular_rps", 8.0);
@@ -102,6 +103,10 @@ WheelOdomFusionNode::WheelOdomFusionNode(const rclcpp::NodeOptions & options)
   last_wheel_rx_ = this->now();
   watchdog_timer_ = create_wall_timer(
     std::chrono::milliseconds(100), std::bind(&WheelOdomFusionNode::watchdogCallback, this));
+
+  diag_pub_ = create_publisher<diagnostic_msgs::msg::DiagnosticArray>("/diagnostics", 10);
+  diag_timer_ = create_wall_timer(
+    std::chrono::seconds(1), std::bind(&WheelOdomFusionNode::publishDiagnostics, this));
 
   RCLCPP_INFO(
     get_logger(), "wheel_odom_fusion: %s + %s -> %s (%s -> %s at wheel rate)",
@@ -433,6 +438,7 @@ void WheelOdomFusionNode::lioCallback(const nav_msgs::msg::Odometry::SharedPtr m
   latest_p_lio_ = odom_to_lidar * t_lidar_base_;
   have_p_lio_ = true;
   lio_stale_ = false;
+  lio_hold_ = false;
   last_lio_rx_ = this->now();
 
   double roll = 0.0;
@@ -479,8 +485,14 @@ void WheelOdomFusionNode::lioCallback(const nav_msgs::msg::Odometry::SharedPtr m
         } else {
           outlier_count_ = 0;
           // 轮式越不可信（自转 / 零速却在动 / 位姿与 twist 不自洽），越快采纳 LIO。
-          const double alpha_eff = gatedAlpha(motionWindow(stamp), twistAt(stamp), confidence_);
+          const MotionWindow win = motionWindow(stamp);
+          const double alpha_eff = gatedAlpha(win, twistAt(stamp), confidence_);
           offset_ = blend(offset_, measured, alpha_eff);
+          last_alpha_eff_ = alpha_eff;
+          last_err_translation_ = err_translation;
+          last_err_yaw_ = err_yaw;
+          last_mismatch_ = zeroSpeedMismatch(win, confidence_) ||
+            consistencyMismatch(win, confidence_);
         }
 
         if (publish_on_lio_) {
@@ -511,13 +523,25 @@ void WheelOdomFusionNode::watchdogCallback()
   }
 
   const double lio_age = (this->now() - last_lio_rx_).seconds();
-  if (lio_age > lio_timeout_s_) {
+  if (lio_age > lio_hold_s_) {
     if (!lio_stale_) {
-      RCLCPP_ERROR(get_logger(), "LIO 已 %.2f s 无更新，停止发布位姿", lio_age);
+      RCLCPP_ERROR(get_logger(), "LIO 已 %.2f s 无更新，超过保持上限，停止发布位姿", lio_age);
     }
     lio_stale_ = true;
+    lio_hold_ = false;
     return;
   }
+  if (lio_age > lio_timeout_s_) {
+    if (!lio_hold_) {
+      RCLCPP_WARN(
+        get_logger(), "LIO 已 %.2f s 无更新，改用轮速外推保持发布（上限 %.1f s）", lio_age,
+        lio_hold_s_);
+    }
+    lio_hold_ = true;
+    lio_stale_ = false;
+    return;
+  }
+  lio_hold_ = false;
 
   if (mode_ != Mode::FUSED) {
     return;
@@ -529,6 +553,50 @@ void WheelOdomFusionNode::watchdogCallback()
     outlier_count_ = 0;
     RCLCPP_WARN(get_logger(), "轮式里程计已 %.2f s 无有效数据，退化为纯 LIO", wheel_age);
   }
+}
+
+void WheelOdomFusionNode::publishDiagnostics()
+{
+  std::lock_guard<std::mutex> lock(mutex_);
+
+  diagnostic_msgs::msg::DiagnosticArray arr;
+  arr.header.stamp = this->now();
+
+  diagnostic_msgs::msg::DiagnosticStatus st;
+  st.name = "localization/fusion";
+  st.hardware_id = "wheel_odom_fusion";
+
+  const char * state = "NORMAL";
+  if (lio_stale_) {
+    state = "LIO_STALE";
+  } else if (lio_hold_) {
+    state = "LIO_STALE_HOLD";
+  } else if (mode_ == Mode::LIO_ONLY) {
+    state = "WHEEL_LOST";
+  } else if (last_mismatch_) {
+    state = "MISMATCH";
+  }
+  const bool bad = std::string(state) != "NORMAL";
+  st.level = bad ? diagnostic_msgs::msg::DiagnosticStatus::WARN :
+    diagnostic_msgs::msg::DiagnosticStatus::OK;
+  st.message = state;
+
+  auto add = [&st](const std::string & key, const std::string & value) {
+      diagnostic_msgs::msg::KeyValue kv;
+      kv.key = key;
+      kv.value = value;
+      st.values.push_back(kv);
+    };
+  add("state", state);
+  add("alpha_eff", std::to_string(last_alpha_eff_));
+  add("last_err_translation_m", std::to_string(last_err_translation_));
+  add("last_err_yaw_rad", std::to_string(last_err_yaw_));
+  add("mismatch", last_mismatch_ ? "true" : "false");
+  add("lio_age_s", std::to_string((this->now() - last_lio_rx_).seconds()));
+  add("wheel_age_s", std::to_string((this->now() - last_wheel_rx_).seconds()));
+
+  arr.status.push_back(st);
+  diag_pub_->publish(arr);
 }
 
 }  // namespace wheel_odom_fusion

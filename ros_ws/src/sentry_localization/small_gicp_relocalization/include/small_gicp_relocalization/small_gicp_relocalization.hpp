@@ -19,6 +19,7 @@
 #include <string>
 #include <vector>
 
+#include "diagnostic_msgs/msg/diagnostic_array.hpp"
 #include "geometry_msgs/msg/pose_with_covariance_stamped.hpp"
 #include "pcl/io/pcd_io.h"
 #include "rclcpp/rclcpp.hpp"
@@ -46,6 +47,7 @@ private:
   void performRegistration();
   void publishTransform();
   void initialPoseCallback(const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg);
+  void publishDiagnostics(double inlier_ratio, double correction_m, double correction_yaw);
 
   rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr pcd_sub_;
   rclcpp::Subscription<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr initial_pose_sub_;
@@ -68,6 +70,58 @@ private:
   rclcpp::Time last_scan_time_;
   Eigen::Isometry3d result_t_;
   Eigen::Isometry3d previous_result_t_;
+
+  // 配准验收（2026-11-13 可靠性调优）：不合格的结果不更新 TF，连续拒绝进入降级冻结。
+  double min_inlier_ratio_;
+  double min_inlier_ratio_recovery_;
+  double relocalize_min_inlier_gap_;
+  double max_correction_trans_;
+  double max_correction_yaw_;
+  int degraded_after_rejects_;
+  bool have_accepted_{false};
+  bool degraded_{false};
+  int consecutive_rejects_{0};
+  double last_inlier_ratio_{0.0};
+  double last_correction_m_{0.0};
+  double last_correction_yaw_{0.0};
+  // 连续多次配准收敛到同一个「大修正」时，判为真实位移并重新锚定（防止被撞后永久冻结）。
+  double reanchor_consistency_trans_;
+  double reanchor_consistency_yaw_;
+  int reanchor_after_stable_;
+  Eigen::Isometry3d candidate_t_;
+  bool have_candidate_{false};
+  int candidate_stable_{0};
+
+  // 降级后的恢复（2026-11-13 T2c 实测：大位移下修正抖动 20 cm，严格收敛永远凑不齐）：
+  // 1) 宽松重锚：连续 N 次落在首个候选 ±relaxed 内即接受；
+  // 2) 兜底全局重定位：DEGRADED 持续超过阈值后，沿当前位姿做多初值 GICP 搜索。
+  double reanchor_relaxed_trans_;
+  double reanchor_relaxed_yaw_;
+  int reanchor_relaxed_after_;
+  int relaxed_stable_{0};
+  double relocalize_after_s_;
+  double relocalize_grid_xy_;
+  double relocalize_grid_yaw_;
+  int relocalize_steps_xy_;
+  int relocalize_steps_yaw_;
+  int relocalize_min_agreement_;
+  rclcpp::Time degraded_since_;
+  bool relocalize_attempted_{false};
+  bool globalRelocalize();
+  void captureTrustedPose();
+
+  // 手动初值（/initialpose）先校验再接受（2026-11-13 R2）。
+  Eigen::Isometry3d pending_init_t_;
+  bool have_pending_init_{false};
+
+  // DEGRADED 期间冻结的是「全局位姿」而不是 map->odom：用 odom->base 的实时值补偿
+  // （遮挡期间 LIO 的 IMU 积分会让 odom->base 漂几米，只冻结 map->odom 会把全局位姿拖走）。
+  bool have_frozen_base_{false};
+  Eigen::Isometry3d frozen_map_base_{Eigen::Isometry3d::Identity()};
+  bool have_trusted_{false};
+  Eigen::Isometry3d last_trusted_map_base_{Eigen::Isometry3d::Identity()};
+  rclcpp::Time last_accept_time_;
+  rclcpp::Publisher<diagnostic_msgs::msg::DiagnosticArray>::SharedPtr diag_pub_;
 
   pcl::PointCloud<pcl::PointXYZ>::Ptr global_map_;
   pcl::PointCloud<pcl::PointXYZ>::Ptr registered_scan_;
