@@ -399,14 +399,14 @@ controller_server:
       # 下面两个插件声明了但原先没写（走插件默认值），母工程显式写出，这里补齐：
       approach_velocity_scaling_dist: 0.6   # 距终点 0.6 m 内按比例减速
       min_approach_linear_velocity: 0.05    # 减速下限，避免末端爬行
-      v_linear_min: -0.90
-      v_linear_max: 0.90
+      v_linear_min: -1.2
+      v_linear_max: 1.2
       v_angular_min: -0.8
       v_angular_max: 0.8
-      curvature_min: 0.4                                # 低曲率阈值，低于此值不减速。
+      curvature_min: 0.3                                # 低曲率阈值，低于此值不减速。
       curvature_max: 0.7
 
-      reduction_ratio_at_high_curvature: 0.5
+      reduction_ratio_at_high_curvature: 0.4
 
       curvature_forward_dist: 0.7                       # 前向距离，用于曲率计算（对齐母工程 0.7）
       curvature_backward_dist: 0.3                      # 后向距离，用于曲率计算（对齐母工程 0.3）
@@ -625,8 +625,8 @@ velocity_smoother:
     # 10 m/s^2、wz 12 rad/s，都在这些值之上，不构成额外截断。
     # 这三组值必须与 usb_bridge.launch.py 的 max_vx/max_vy/max_wz 同步，
     # 否则会被更紧的一处静默截断（见 docs/parameters.md §4.2）。
-    max_velocity: [0.90, 0.60, 0.8]
-    min_velocity: [-0.90, -0.60, -0.8]
+    max_velocity: [1.2, 0.60, 0.8]
+    min_velocity: [-1.2, -0.60, -0.8]
     max_accel: [2.5, 2.5, 4.0]
     max_decel: [-2.5, -2.5, -4.0]
     odom_topic: "odometry"
