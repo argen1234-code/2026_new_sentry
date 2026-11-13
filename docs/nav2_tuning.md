@@ -400,3 +400,60 @@ pcl_statistical_outlier_removal /tmp/prior_5cm.pcd /tmp/prior_clean.pcd -mean_k 
 `pitfalls.md` 速度环那一条）：`cmd 0.875 → 实测 0.390 m/s`，按 `0.55×cmd − 0.14`
 推算 1.2 的指令对应约 0.52 m/s。回放台的 plant 模型**没有最高速饱和**，
 所以台架测出来的永远是上限而非真车速——真车能跑多快只能上车量。
+
+---
+
+## 十一、2026-11-13 定案：过弯横偏（曲率减速 + 前瞻，必须成对改）
+
+场景：`maps/corridor_1102`，去 `(4.643, 0.100)`、回 `(0.069, 0.077)`，
+`use_wheel_fusion:=true`、`alpha 0.2`、`wz_gain:=1.0`，实车逐轮录包。
+问题现象：回程弯口（x≈3.2–3.7）车被带低 20–30 cm，擦上 □ 挡板，第二轮 ABORT。
+
+### 测量口径（三条，缺一条就会得出相反结论）
+
+1. **横偏在 map 系算**：先套 `map→odom` 再与 `/plan` 求最近距离。直接拿 `/odometry`
+   比 map 系 plan，会带上 `map→odom` 的平移偏置（本轮 −0.014…−0.068 m）。
+2. **方向差在底盘系算**：`use_gimbal: False` 时 base 系 = 底盘系，指令本身已减去偏航；
+   再减一次会凭空造出 `ψ` 的误差（见 `pitfalls.md` #33）。
+3. **前瞻看实测模长**：统计 `/lookahead_point` 的 `hypot(x,y)`，不要只信参数值
+   （会被 `min_lookahead_dist` 钳住，见 `pitfalls.md` #32）。
+
+### 决定性数据（回程弯道，跟踪段；第四轮起无恢复动作）
+
+| 轮次 | 改动 | 弯道前瞻中位 | 弯道指令速度 | 横偏峰值 | 横偏 p50 / p90 | 规划拒绝 / backup | 结果 |
+|---|---|---|---|---|---|---|---|
+| round02 | 基线（curv 1.0/0.75，look 1.0/0.5） | 0.69 m | 0.68 m/s | 27.1 cm | — | 3 / 1 | ABORT |
+| round03 | curv 0.7/0.5 | 0.56 m | 0.45 m/s | 20.4 cm | 7.3 / 14.4 cm | 3 / 1 | 擦墙后恢复成功 |
+| **round04** | + look 0.7/0.4 | **0.40 m** | 0.45 m/s | **9.4 cm** | **2.5 / 5.4 cm** | **0 / 0** | SUCCEEDED ×2 |
+
+对照：round01（纯 LIO、同配置）横偏峰值 14.6 cm；11-13 参考融合包 28.1 cm（靠 backup 脱困）。
+说明横偏是**配置性**问题，不是某一次异常。
+
+### 机制（已交叉核对）
+
+- 纯跟踪瞄准前方 `v × lookahead_time` 处的 carrot，车→carrot 的**弦线切弯内**，
+  这是横偏主因；旋转滞后只是次要项（底盘系口径下中位 −5…+1°、p90 10–15°）。
+- 曲率减速生效后速度下降 → 速度缩放前瞻随之变短 → 横偏先降到 20.4 cm。
+- 再把 `lookahead_time` / `min_lookahead_dist` 成对下调，前瞻压到 0.40 m，
+  横偏进 10 cm，不再触发规划拒绝与恢复。
+
+### 采纳的改动
+
+| 参数 | 从 → 到 | 备注 |
+|---|---|---|
+| `FollowPath.curvature_max` | 1.0 → 0.7 | 对齐北极熊 |
+| `FollowPath.reduction_ratio_at_high_curvature` | 0.75 → 0.5 | 对齐北极熊 |
+| `FollowPath.lookahead_time` | 1.0 → 0.7 | 必须与下一行成对改 |
+| `FollowPath.min_lookahead_dist` | 0.5 → 0.4 | 否则被钳回 0.5 |
+
+`alpha`、`enable_rotation`、`max_lookahead_dist`、规划器代价、BT、恢复行为**均未动**。
+
+### 代价与后续
+
+- **直道轻微摆头**：第一腿直道横偏 p95 4.3 → 6.9 cm、偏航角速度 std 0.31 → 0.35 rad/s、
+  同段路径 3.18 → 3.40 m。绝对量只有 2–3 cm，弯道收益（−11 cm）更大，本轮接受。
+- 若以后觉得直道晃：把 `use_velocity_scaled_lookahead_dist` 关掉、固定
+  `lookahead_dist ≈ 0.45 m` 再 A/B；不要只继续降 `lookahead_time`（会被 min 兜住）。
+- 未做的事：`enable_rotation: false`（北极熊原样）没有试——训练底盘没有独立云台，
+  雷达随车体转，需要自转保持朝向；若换成正式云台底盘应重新评估。
+

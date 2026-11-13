@@ -509,3 +509,42 @@
 - **涉及文件**：无（工具链）
 - **验证方式**：命令能正常回放并打印 `Opened database ... READ_ONLY`。
 - **日期**：2026-11-12
+
+## 32. 只改 `lookahead_time` 收前瞻，会被 `min_lookahead_dist` 悄悄钳回去
+
+- **现象**：把 `lookahead_time` 1.0 → 0.7 想把弯道前瞻从 0.58 m 收到 0.41 m，
+  实测 `/lookahead_point` 到车心的距离仍是 **0.50 m**，横偏只降 8 cm。
+- **根因**：`getLookAheadDistance()`（`omni_pid_pursuit_controller.cpp:559`）先算
+  `v × lookahead_time`，再 `clamp` 到 `[min_lookahead_dist, max_lookahead_dist]`。
+  弯道速度约 0.58 m/s，0.58×0.7 = 0.41 < `min_lookahead_dist: 0.5`，于是被钳回 0.5。
+  参数照样"生效"，只是生效后的值等于没改。
+- **修正**：**成对改**——`lookahead_time` 1.0→0.7 同时 `min_lookahead_dist` 0.5→0.4。
+  改完用 `/lookahead_point` 模长中位数复核实际前瞻，而不是只看参数值。
+- **涉及文件**：`ros_ws/src/sentry_navigation/pb2025_nav_bringup/config/reality/nav2_params.yaml`
+  （`controller_server.FollowPath`）；逻辑在
+  `ros_ws/src/sentry_navigation/pb_omni_pid_pursuit_controller/src/omni_pid_pursuit_controller.cpp`
+- **验证方式**：实车录包后统计 `/lookahead_point` 的 `hypot(x,y)`：弯道中位 0.56 → 0.40 m；
+  回程弯道 map 系横偏峰值 20.4 → 9.4 cm。
+- **日期**：2026-11-13
+
+## 33. `use_gimbal: false` 时 base 系就是底盘系，按"世界系"算方向差会造出假的 20–30° 滞后
+
+- **现象**：分析过弯方向跟踪时，把 `/cmd_vel_controller` 的方向减去 `/odometry` 的偏航
+  再与 LIO 实测位移方向比较，得到"自转时平移方向滞后 20–30°"，并据此判定"边转边平移"
+  是过弯横偏主因。
+- **根因**：`fake_vel_transform` 的 `gimbal_yaw → gimbal_yaw_fake` 旋转量为
+  `-current_robot_base_angle_`。当前训练底盘没有独立云台 yaw，配置里
+  `use_gimbal: False`，该变换**恒等**（录包实测该 TF yaw = 0.0°），
+  于是 Nav2 的 base 系 = 底盘系，控制器输出的 x/y 本来就是底盘系分量。
+  再减一次偏航等于把坐标系多转了一次，误差凭空多出一个 `ψ`。
+- **修正**：统一口径——**指令就是底盘系**，实测位移方向用 `LIO 世界方向 − odom 偏航`
+  转到底盘系后直接与指令比。按此口径重算，弯道段方向误差中位只有 −5…+1°、
+  p90 10–15°；之前引用的 20–30° 是特定瞬间，不具代表性。
+  另外比较横偏时必须先套 `map→odom`（本轮三份包的 `t_y` 在 −0.014…−0.068 m 之间，
+  直接拿 odom 位姿比 map 系 plan 会凭空多出 2–7 cm）。
+- **涉及文件**：无（分析口径）；相关实现
+  `ros_ws/src/sentry_navigation/fake_vel_transform/src/fake_vel_transform.cpp:135-145`
+- **验证方式**：录包里查 `ros2 run tf2_ros tf2_echo gimbal_yaw gimbal_yaw_fake`，
+  yaw 恒为 0；换成底盘系口径后，"不转时误差中位 ±2°、转动时误差不再有系统性偏置"，
+  且与轮速里程计方向互相印证（两路独立数据一致）。
+- **日期**：2026-11-13
