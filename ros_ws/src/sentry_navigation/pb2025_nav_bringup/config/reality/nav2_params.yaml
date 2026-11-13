@@ -386,8 +386,8 @@ controller_server:
       min_max_sum_error: 1.0
       lookahead_dist: 2.0
       use_velocity_scaled_lookahead_dist: true
-      lookahead_time: 1.0
-      min_lookahead_dist: 0.5  # 增加最小前瞻距离
+      lookahead_time: 0.7
+      min_lookahead_dist: 0.4  # 增加最小前瞻距离
       max_lookahead_dist: 1.0
       use_interpolation: true  # 启用插值，使路径更平滑
       use_rotate_to_heading: false
@@ -404,9 +404,9 @@ controller_server:
       v_angular_min: -0.8
       v_angular_max: 0.8
       curvature_min: 0.4                                # 低曲率阈值，低于此值不减速。
-      curvature_max: 1.0
+      curvature_max: 0.7
 
-      reduction_ratio_at_high_curvature: 0.75
+      reduction_ratio_at_high_curvature: 0.5
 
       curvature_forward_dist: 0.7                       # 前向距离，用于曲率计算（对齐母工程 0.7）
       curvature_backward_dist: 0.3                      # 后向距离，用于曲率计算（对齐母工程 0.3）
