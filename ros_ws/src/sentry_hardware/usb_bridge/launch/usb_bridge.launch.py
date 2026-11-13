@@ -17,6 +17,8 @@ def generate_launch_description():
         DeclareLaunchArgument('cmd_vel_topic', default_value='/cmd_vel'),
         DeclareLaunchArgument('odom_publish_tf', default_value='false',
                               description='Publish odom_wheel -> base_footprint TF'),
+        DeclareLaunchArgument('wz_gain', default_value='0.80',
+                              description='Scale applied to /cmd_vel wz before the chassis'),
         Node(
             package='usb_bridge',
             executable='usb_bridge',
@@ -42,7 +44,8 @@ def generate_launch_description():
                 # 2026-11-12 实测（~/bags/wz_sweep_1725）：固件把自转放大
                 # 实际 = 1.70*wz + 0.0（wz 0.3->0.65，1.2->1.88 rad/s）。
                 # 这里压回 1/1.70；平移增益 1.08 未补偿。
-                'wz_gain': 0.80,
+                'wz_gain': ParameterValue(
+                    LaunchConfiguration('wz_gain'), value_type=float),
             }],
         ),
     ])
