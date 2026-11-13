@@ -548,3 +548,36 @@
   yaw 恒为 0；换成底盘系口径后，"不转时误差中位 ±2°、转动时误差不再有系统性偏置"，
   且与轮速里程计方向互相印证（两路独立数据一致）。
 - **日期**：2026-11-13
+
+## 34. `max_vy` 逐轴钳位作用在旋转后的坐标系上，会截断并带偏直行指令
+
+- **现象**：`v_linear_max` 从 0.9 提到 1.2，底盘实测只从 0.74/0.91 涨到 0.79/0.99 m/s，
+  看起来像底盘速度环饱和（差点据此改固件 PI/电流限幅）。
+- **根因**：`cmd_vel_to_unified.py:120-121` 先把 `/cmd_vel` 用 `frame_yaw = −135°`
+  旋转到固件车体系，**再逐轴**钳位 `max_vx 1.2 / max_vy 0.6`。一条 ROS +x 的直行指令
+  变成 `(±0.707v, ±0.707v)`，v > 0.85 时 `vy` 分量顶到 0.6：模长被砍（1.20→1.06）、
+  方向偏约 10°。round05b 录包 `/unified_cmd` 实证：`/cmd_vel (+1.20,−0.03)` →
+  下位机 `(−0.87,−0.60)`，且 `vy` 恒等于 −0.60。
+- **修正**：`max_vy` 0.6 → 1.2（与 `max_vx` 对称）。真实横移仍由 `velocity_smoother`
+  的 0.6 限制，不会因此变快。改后 6A 扫描：指令 1.2 → 轮速 1.16、LIO 1.24 m/s，
+  每轮电流 1.2–2.0 A（限幅 4.5 A）。
+- **涉及文件**：`ros_ws/src/sentry_hardware/usb_bridge/launch/usb_bridge.launch.py`
+- **验证方式**：录包对比 `/cmd_vel` 与 `/unified_cmd` 的模长与方向；
+  或直接 `ros2 topic echo /unified_cmd` 看 `vy_mm_s` 是否卡在 ±600。
+- **日期**：2026-11-13
+
+## 35. 同时起两套栈：节点重复、TF 多源、`/global_costmap/costmap` 停发、RViz 全灰
+
+- **现象**：RViz 里全局图层一片灰，像"全局规划没发布"；`ros2 node list` 里每个 nav2
+  节点出现 3 次；`/local_costmap/costmap` 有 3 个发布者；实车栈的 usb_bridge / livox /
+  map_server / point_lio 全部不存在（抢串口和雷达端口失败后退出）。
+- **根因**：两个 `ros2 launch sentry_bringup sentry.launch.py` 同时在跑（一套是调试脚本起的，
+  一套是人工在终端起的），且参数不同。重复节点名让生命周期管理、代价地图发布和 TF 互相踩。
+  录包取证：某轮 `/global_costmap/costmap` 全包 0 条、`/plan` 正常 49 条——**规划本身没坏，
+  RViz 只是拿不到全局代价地图**（规划器用内部栅格，不发话题也能工作）。
+- **修正**：全停后只起一套；起栈后按四条核验再发目标：
+  `ros2 node list | sort | uniq -c`（应全为 1）、`/map_server` active、`/map` 发布者 1、
+  `/global_costmap/costmap` 有频率。
+- **涉及文件**：无（操作纪律）
+- **验证方式**：单栈重启后 `/global_costmap/costmap` 约 1.67 Hz（`ros2 topic hz`）。
+- **日期**：2026-11-13
