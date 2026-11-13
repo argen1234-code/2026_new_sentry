@@ -191,6 +191,9 @@ small_gicp_relocalization:
     # 错误匹配也能连续稳定，据此接受过 1.2 m/38° 的错误位姿。
     min_inlier_ratio_recovery: 0.85
     relocalize_min_inlier_gap: 0.10
+    # 观测覆盖：单侧遮挡时 inlier 比例不会掉（源点少了但都匹配），用方位扇区覆盖识别
+    min_sector_coverage: 0.60
+    min_source_points: 300
     max_correction_trans: 0.30      # 单次修正平移上限 m（2 Hz 下正常为毫米级）
     max_correction_yaw: 0.20        # 单次修正偏航上限 rad
     degraded_after_rejects: 6       # 连续拒绝次数（≈3 s）后进入 DEGRADED

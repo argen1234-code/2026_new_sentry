@@ -18,6 +18,11 @@ COMMS=(
   terrainAnalysis
   pointcloud_to_l
   controller_serv
+  # 2026-11-13：map_server 与 nav2 容器不在原清单里，多次起停后留下孤儿进程，
+  # 它们的 DDS 参与者占满 /dev/shm 的 fastrtps 端口文件（实测堆积 104 个），
+  # 导致后续 map_server configure 失败、action 结果收不到、CLI/rviz 崩溃。
+  map_server
+  component_conta
   planner_server
   bt_navigator
   behavior_server

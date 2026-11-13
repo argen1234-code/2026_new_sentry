@@ -581,3 +581,22 @@
 - **涉及文件**：无（操作纪律）
 - **验证方式**：单栈重启后 `/global_costmap/costmap` 约 1.67 Hz（`ros2 topic hz`）。
 - **日期**：2026-11-13
+
+## 36. 多次起停后 `/dev/shm` 被 fastrtps 端口文件占满，导致 map_server 卡 unconfigured、action 结果收不到
+
+- **现象**：同一会话里反复起停栈之后，出现一串"互不相关"的怪问题：
+  `map_server` 停在 `unconfigured`、`ros2 action send_goal` 拿不到 result（客户端 `status=-1`）、
+  `ros2` CLI 与 rviz2 偶发段错误。日志里反复出现
+  `RTPS_TRANSPORT_SHM: Failed init_port fastrtps_portXXXX: open_and_lock_file failed`。
+- **根因**：`tools/stop_ros_stack.sh` 的进程清单里**没有 `map_server` 和 nav2 容器**，
+  多次起停后积累了多个孤儿 `map_server`（实测同时存活 2 个）和 ros2 daemon 的 DDS 参与者；
+  每个参与者都会在 `/dev/shm` 创建 fastrtps 端口/信号量文件，堆积到 104 个后端口锁冲突，
+  新建的 DDS 参与者（代价地图、action server、CLI）随机失败。
+- **修正**：
+  1. `stop_ros_stack.sh` 的清单补上 `map_server`、`component_conta`；
+  2. 起栈前确认无残留：`pgrep -af 'map_server|component_conta|usb_bridge|livox'`；
+  3. 清理：`ros2 daemon stop` + 无 ROS 进程时 `rm -f /dev/shm/fastrtps_* /dev/shm/sem.fastrtps_*`。
+- **涉及文件**：`ros_ws/tools/stop_ros_stack.sh`
+- **验证方式**：清理后单栈启动，`ros2 topic hz /diagnostics` 正常、`/map` 有发布者、
+  `ros2 action send_goal` 能收到 result。
+- **日期**：2026-11-13

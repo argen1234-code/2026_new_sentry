@@ -14,6 +14,7 @@
 
 #include "small_gicp_relocalization/small_gicp_relocalization.hpp"
 
+#include <array>
 #include <cmath>
 #include <string>
 
@@ -51,6 +52,9 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
   // 但那是走廊里的错误匹配，必须用更高门槛拒绝。
   this->declare_parameter("min_inlier_ratio_recovery", 0.85);
   this->declare_parameter("relocalize_min_inlier_gap", 0.10);
+  // 观测覆盖：inlier 是「匹配点/源点」，单侧被挡时源点变少但仍全匹配，比例不会掉。
+  this->declare_parameter("min_sector_coverage", 0.60);
+  this->declare_parameter("min_source_points", 300);
   this->declare_parameter("max_correction_trans", 0.30);
   this->declare_parameter("max_correction_yaw", 0.20);
   this->declare_parameter("degraded_after_rejects", 6);
@@ -83,6 +87,8 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
   this->get_parameter("min_inlier_ratio", min_inlier_ratio_);
   this->get_parameter("min_inlier_ratio_recovery", min_inlier_ratio_recovery_);
   this->get_parameter("relocalize_min_inlier_gap", relocalize_min_inlier_gap_);
+  this->get_parameter("min_sector_coverage", min_sector_coverage_);
+  this->get_parameter("min_source_points", min_source_points_);
   this->get_parameter("max_correction_trans", max_correction_trans_);
   this->get_parameter("max_correction_yaw", max_correction_yaw_);
   this->get_parameter("degraded_after_rejects", degraded_after_rejects_);
@@ -209,6 +215,14 @@ void SmallGicpRelocalizationNode::performRegistration()
 
   if (!source_ || !source_tree_) {
     return;
+  }
+
+  // 观测覆盖检查（OBS_WEAK 只上报，不冻结）
+  double coverage = 1.0;
+  if (computeObservationCoverage(coverage)) {
+    last_coverage_ = coverage;
+    obs_weak_ =
+      coverage < min_sector_coverage_ || static_cast<int>(source_->size()) < min_source_points_;
   }
 
   register_->reduction.num_threads = num_threads_;
@@ -504,7 +518,11 @@ void SmallGicpRelocalizationNode::publishDiagnostics(
   st.hardware_id = "small_gicp";
   st.level = degraded_ ? diagnostic_msgs::msg::DiagnosticStatus::WARN
                        : diagnostic_msgs::msg::DiagnosticStatus::OK;
-  st.message = degraded_ ? "DEGRADED (map->odom frozen)" : "NORMAL";
+  const char * state = degraded_ ? "DEGRADED" : (obs_weak_ ? "OBS_WEAK" : "NORMAL");
+  st.message = degraded_ ? "DEGRADED (map->odom frozen)"
+                         : (obs_weak_ ? "OBS_WEAK (partial observation)" : "NORMAL");
+  st.level = (degraded_ || obs_weak_) ? diagnostic_msgs::msg::DiagnosticStatus::WARN
+                                      : diagnostic_msgs::msg::DiagnosticStatus::OK;
 
   auto add = [&st](const std::string & key, const std::string & value) {
     diagnostic_msgs::msg::KeyValue kv;
@@ -512,7 +530,9 @@ void SmallGicpRelocalizationNode::publishDiagnostics(
     kv.value = value;
     st.values.push_back(kv);
   };
-  add("state", degraded_ ? "DEGRADED" : "NORMAL");
+  add("state", state);
+  add("sector_coverage", std::to_string(last_coverage_));
+  add("source_points", std::to_string(source_ ? source_->size() : 0));
   add("inlier_ratio", std::to_string(inlier_ratio));
   add("correction_m", std::to_string(correction_m));
   add("correction_yaw_rad", std::to_string(correction_yaw));
@@ -521,6 +541,38 @@ void SmallGicpRelocalizationNode::publishDiagnostics(
 
   arr.status.push_back(st);
   diag_pub_->publish(arr);
+}
+
+bool SmallGicpRelocalizationNode::computeObservationCoverage(double & coverage)
+{
+  coverage = 1.0;
+  if (!source_ || source_->empty()) {
+    coverage = 0.0;
+    return true;
+  }
+  try {
+    const auto tf = tf_buffer_->lookupTransform(
+      odom_frame_, base_frame_, tf2::TimePointZero, tf2::durationFromSec(0.05));
+    const Eigen::Vector3d r = tf2::transformToEigen(tf.transform).translation();
+    constexpr int kSectors = 36;
+    std::array<bool, kSectors> hit{};
+    for (const auto & p : source_->points) {
+      const double dx = p.x - r.x();
+      const double dy = p.y - r.y();
+      if (dx * dx + dy * dy < 0.25) {
+        continue;  // 0.5 m 内忽略（车体/近场）
+      }
+      int k = static_cast<int>((std::atan2(dy, dx) + M_PI) / (2.0 * M_PI) * kSectors) % kSectors;
+      if (k < 0) k += kSectors;
+      hit[k] = true;
+    }
+    int c = 0;
+    for (bool h : hit) c += h ? 1 : 0;
+    coverage = static_cast<double>(c) / kSectors;
+    return true;
+  } catch (const tf2::TransformException &) {
+    return false;
+  }
 }
 
 void SmallGicpRelocalizationNode::captureTrustedPose()

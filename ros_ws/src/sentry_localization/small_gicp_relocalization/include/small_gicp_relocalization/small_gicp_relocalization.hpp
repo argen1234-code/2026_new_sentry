@@ -48,6 +48,7 @@ private:
   void publishTransform();
   void initialPoseCallback(const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg);
   void publishDiagnostics(double inlier_ratio, double correction_m, double correction_yaw);
+  bool computeObservationCoverage(double & coverage);
 
   rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr pcd_sub_;
   rclcpp::Subscription<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr initial_pose_sub_;
@@ -75,6 +76,11 @@ private:
   double min_inlier_ratio_;
   double min_inlier_ratio_recovery_;
   double relocalize_min_inlier_gap_;
+  // 观测覆盖（OBS_WEAK）：只看 inlier 比例发现不了"单侧被挡"，需要看方位扇区覆盖与点数。
+  double min_sector_coverage_;
+  int min_source_points_;
+  bool obs_weak_{false};
+  double last_coverage_{1.0};
   double max_correction_trans_;
   double max_correction_yaw_;
   int degraded_after_rejects_;
