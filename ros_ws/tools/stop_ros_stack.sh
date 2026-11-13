@@ -23,7 +23,7 @@ COMMS=(
   # 导致后续 map_server configure 失败、action 结果收不到、CLI/rviz 崩溃。
   map_server
   component_conta
-  localization_sup
+  localization_su
   planner_server
   bt_navigator
   behavior_server
