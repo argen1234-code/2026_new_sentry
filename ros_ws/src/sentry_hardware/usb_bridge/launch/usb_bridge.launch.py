@@ -39,7 +39,11 @@ def generate_launch_description():
                     LaunchConfiguration('enable_motion'), value_type=bool),
                 'cmd_vel_topic': LaunchConfiguration('cmd_vel_topic'),
                 'max_vx': 1.2,
-                'max_vy': 0.6,
+                # 逐轴钳位作用在 frame_yaw 旋转之后的固件车体系上：一条沿 ROS +x
+                # 的直行指令在这里会变成 (±0.707v, ±0.707v)，max_vy 0.6 会把
+                # 0.85 m/s 以上的直行指令截掉并带偏方向（2026-11-13 round05b 实测：
+                # /cmd_vel 1.20 → 下位机 (−0.87,−0.60)，方向偏 10°）。与 max_vx 对称。
+                'max_vy': 1.2,
                 'max_wz': 1.3,
                 # 2026-11-12 实测（~/bags/wz_sweep_1725）：固件把自转放大
                 # 实际 = 1.70*wz + 0.0（wz 0.3->0.65，1.2->1.88 rad/s）。
