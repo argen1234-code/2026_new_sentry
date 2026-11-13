@@ -170,6 +170,11 @@ def generate_launch_description():
         include("usb_bridge", "usb_bridge.launch.py", {
             "enable_motion": LaunchConfiguration("enable_motion"),
         }, condition=LaunchConfigurationEquals("chassis_transport", "usb")),
+        # 定位安全监督（对齐东北大学 TDT 的"失败可检测、输出有界"）：
+        # localization/gicp 处于 OBS_WEAK/DEGRADED 超过 2 s 就取消导航目标并停车。
+        Node(package="sentry_safety", executable="localization_supervisor",
+             name="localization_supervisor", output="screen",
+             parameters=[{"hold_s": 2.0, "enabled": True}]),
         Node(package="rclcpp_components", executable="component_container_isolated",
              name="nav2_container", output="screen",
              parameters=[configured_params, {"autostart": autostart}]),
