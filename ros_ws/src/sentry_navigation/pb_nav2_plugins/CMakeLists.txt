@@ -16,6 +16,7 @@ ament_auto_find_build_dependencies()
 
 ament_auto_add_library(pb_back_up_frees_space_behavior SHARED
   src/behaviors/back_up_free_space.cpp
+  src/behaviors/wait_for_clearance.cpp
 )
 
 ament_auto_add_library(layers SHARED
