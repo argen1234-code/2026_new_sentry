@@ -16,7 +16,7 @@ point_lio:
     prop_at_freq_of_imu: True
     check_satu: True
     init_map_size: 10
-    point_filter_num: 8                                 # Options: 4, 3
+    point_filter_num: 4                                 # Options: 4, 3（5A 压榨实验：8→4）
     space_down_sample: True
     filter_size_surf: 0.1                               # Options: 0.5, 0.3, 0.2, 0.15, 0.1
     filter_size_map: 0.1                                # Options: 0.5, 0.3, 0.15, 0.1
@@ -86,7 +86,7 @@ point_lio:
       tf_send_en: False                                 # True: send transform from 'camera_init' to 'aft_mapped'
 
     pcd_save:
-      pcd_save_en: True  # 启用PCD保存功能
+      pcd_save_en: False # 导航不需要保存 PCD；开启会把点云攒在内存里（规则 4.5 清理）
       interval: -1       # -1表示所有帧保存在一个PCD文件中
 
 loam_interface:
@@ -353,7 +353,7 @@ controller_server:
   ros__parameters:
     use_sim_time: False
     odom_topic: odometry
-    controller_frequency: 20.0
+    controller_frequency: 30.0
     min_x_velocity_threshold: 0.001
     # 麦轮横移上限只有 0.3 m/s，原值 0.5 会把所有 vy 清零
     min_y_velocity_threshold: 0.001
@@ -615,7 +615,7 @@ waypoint_follower:
 velocity_smoother:
   ros__parameters:
     use_sim_time: False
-    smoothing_frequency: 20.0
+    smoothing_frequency: 30.0
     # True 才会按 max_velocity 缩放；否则 0.5 m/s 这类超限指令会原样下发
     scale_velocities: True
     feedback: "OPEN_LOOP"
